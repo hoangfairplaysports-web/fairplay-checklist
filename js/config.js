@@ -7,5 +7,5 @@ export const CONFIG = {
   // Khoá công khai VAPID cho thông báo đẩy (tạo bằng: npx web-push generate-vapid-keys)
   VAPID_PUBLIC_KEY: 'BNGWg8X-Wt5IwDqWxAn--2U065V3u5j1sEP5m1QPAYMZNWNowuP4BStm44Yqsf0giV5DkAgHzIl-QHNUVUsaH8Q',
   // Tên bot Telegram (không có @), VD: FairplayChecklistBot
-  TELEGRAM_BOT: '',
+  TELEGRAM_BOT: 'fridayofnh10bot',
 };
