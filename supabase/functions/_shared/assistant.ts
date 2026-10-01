@@ -8,6 +8,32 @@ const MODELS: Record<string, string> = {
   'gemini-flash': Deno.env.get('GEMINI_MODEL_FLASH') ?? 'gemini-flash-latest',
   'gemini-pro': Deno.env.get('GEMINI_MODEL_PRO') ?? 'gemini-pro-latest',
 };
+// Model dự phòng khi Google quá tải (503) hoặc vượt hạn mức (429)
+const FALLBACKS = (Deno.env.get('GEMINI_FALLBACKS') ?? 'gemini-flash-lite-latest,gemini-2.5-flash').split(',').map((x) => x.trim()).filter(Boolean);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Gọi Gemini: thử lại khi quá tải, rồi chuyển model dự phòng. Trả về {data, model} hoặc {error}
+async function callGemini(models: string[], body: unknown): Promise<{ data?: any; model?: string; error?: string }> {
+  let last = '';
+  for (const model of models) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY! },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return { data: await res.json(), model };
+      last = `${res.status}`;
+      const text = await res.text();
+      console.error('Gemini', model, res.status, text.slice(0, 300));
+      if (res.status === 404 || res.status === 400) break;        // model không dùng được → thử model khác
+      if (res.status === 401 || res.status === 403) return { error: 'auth' };
+      if (![429, 500, 502, 503, 504].includes(res.status)) break;
+      await sleep(1500 * (attempt + 1));                          // quá tải → đợi rồi thử lại
+    }
+  }
+  return { error: last };
+}
 const WD = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 const STATUS: Record<string, string> = { todo: 'chưa làm', doing: 'đang làm', blocked: 'vướng', done: 'xong' };
 
@@ -249,24 +275,23 @@ Luôn dùng công cụ để đọc/ghi dữ liệu thật, không bịa. Tự s
 Việc cá nhân/gia đình/tài chính/sức khoẻ không liên quan công ty → private=true. Sau khi thêm/sửa, xác nhận lại ngắn gọn ngày giờ.
 Nếu người dùng kể đã tập thể dục/uống nước/ngủ sớm… → log_habit.`;
 
+  let chain = [model, ...FALLBACKS.filter((m) => m !== model)];
   for (let round = 0; round < 6; round++) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents,
-        tools: [{ functionDeclarations: TOOLS }],
-        generationConfig: { temperature: 0.3 },
-      }),
+    const out = await callGemini(chain, {
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
+      tools: [{ functionDeclarations: TOOLS }],
+      generationConfig: { temperature: 0.3 },
     });
-    if (!res.ok) {
-      const err = await res.text();
-      const msg = `Trợ lý gặp lỗi khi gọi Gemini (${res.status}). ${err.slice(0, 200)}`;
+    if (out.error) {
+      const msg = out.error === 'auth'
+        ? 'Khoá Gemini không hợp lệ hoặc đã bị thu hồi — cần nạp lại khoá.'
+        : 'Máy chủ Gemini của Google đang quá tải, mình chưa trả lời được. Bạn thử lại sau ít phút nhé.';
       await admin.from('cl_chat').insert({ owner_id: me.id, role: 'bot', text: msg });
       return msg;
     }
-    const data = await res.json();
+    chain = [out.model!]; // cùng 1 hội thoại giữ nguyên model đã trả lời được
+    const data = out.data;
     const content = data.candidates?.[0]?.content;
     const parts = (content?.parts ?? []) as Record<string, unknown>[];
     const calls = parts.filter((p) => p.functionCall);
