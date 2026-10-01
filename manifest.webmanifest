@@ -1,0 +1,10 @@
+{
+  "name": "Fairplay Checklist",
+  "short_name": "Checklist",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#068bf2",
+  "lang": "vi",
+  "icons": [{ "src": "assets/logo-mark.png", "sizes": "160x158", "type": "image/png", "purpose": "any" }]
+}
