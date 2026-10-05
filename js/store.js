@@ -2,7 +2,7 @@
 // - Chưa điền js/config.js → chế độ DEMO: dữ liệu mẫu, lưu trên trình duyệt (localStorage).
 // - Đã điền → chế độ THẬT: Supabase (đăng nhập, phân quyền RLS). Mọi thao tác cập nhật giao diện ngay
 //   rồi ghi lên máy chủ; nếu máy chủ từ chối thì báo lỗi và tải lại dữ liệu thật.
-import { makeSeed, instantiateRoutines } from './seed.js';
+import { makeSeed, instantiateRoutines, demoEvents } from './seed.js';
 import { CONFIG } from './config.js';
 import { uid, todayStr, addDays, yearStart } from './util.js';
 
@@ -35,11 +35,14 @@ export function setErrorHandler(f) {
 // DEMO
 // ---------------------------------------------------------------------------
 function loadDemo() {
+  let st;
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) st = JSON.parse(raw);
   } catch {}
-  return makeSeed();
+  st = st || makeSeed();
+  if (!st.events) Object.assign(st, demoEvents(st));
+  return st;
 }
 function ensureTodayDemo() {
   for (const d of [todayStr(), addDays(1)]) {
@@ -51,6 +54,7 @@ function ensureTodayDemo() {
 }
 export function resetDemo() {
   state = makeSeed();
+  Object.assign(state, demoEvents(state));
   ensureTodayDemo();
   commit();
 }
@@ -97,6 +101,7 @@ const pick = (o, keys) => Object.fromEntries(keys.filter((k) => k in o).map((k) 
 const TASK_COLS = ['id', 'owner_id', 'title', 'date', 'time', 'end_time', 'due_date', 'source', 'routine_id', 'scope', 'group', 'priority', 'status',
   'progress', 'output', 'qty', 'note', 'block_reason', 'need_help', 'kpi_id', 'assigned_by'];
 const ROUTINE_COLS = ['id', 'title', 'owner_id', 'dept', 'repeat', 'days', 'month_day', 'time', 'end_time', 'kind', 'priority', 'scope', 'group', 'kpi_key', 'active'];
+const EV_TASK_COLS = ['id', 'event_id', 'phase', 'category', 'title', 'detail', 'pic_id', 'pic_name', 'sup_client', 'sup_fp', 'offset_days', 'due_date', 'status', 'note', 'item_id', 'sort'];
 const KPI_COLS = ['id', 'key', 'title', 'owner_id', 'type', 'target', 'period', 'unit', 'manual', 'active'];
 
 export const auth = {
@@ -161,6 +166,10 @@ export async function loadLive() {
     all(() => sb.from('cl_habit_logs').select('*').gte('date', addDays(-120)).order('id')),
     sb.from('cl_chat').select('*').order('at', { ascending: false }).limit(100).then(chk),
   ]);
+  const [events, evTasks] = await Promise.all([
+    all(() => sb.from(me.role === 'admin' ? 'ev_events' : 'ev_events_public').select('*').order('event_date')),
+    all(() => sb.from('ev_tasks').select('*').order('event_id').order('sort')),
+  ]).catch(() => [[], []]);
   state = {
     live: true,
     meId,
@@ -176,6 +185,8 @@ export async function loadLive() {
     habits,
     habit_logs: habitLogs,
     chat: chat.reverse(),
+    events,
+    ev_tasks: evTasks,
     loadedAt: Date.now(),
   };
   commit();
@@ -424,5 +435,43 @@ export const actions = {
   },
   async reload() {
     return loadLive();
+  },
+
+  // ----- Triển khai giải -----
+  updateEvTask(id, patch) {
+    const t = find('ev_tasks', id);
+    if (!t) return;
+    const next = { ...t, ...patch };
+    if (patch.status === 'done' && t.status !== 'done') next.done_at = nowIso();
+    if (patch.status && patch.status !== 'done') next.done_at = null;
+    state.ev_tasks = state.ev_tasks.map((x) => (x.id === id ? next : x));
+    commit();
+    persist(() => run(sb.from('ev_tasks').update(patch).eq('id', id)));
+  },
+  addEvTask(t) {
+    const row = { id: uid(), status: 'todo', sort: 9999, ...t };
+    state.ev_tasks = [...state.ev_tasks, row];
+    commit();
+    persist(() => run(sb.from('ev_tasks').insert(pick(row, EV_TASK_COLS))));
+    return row;
+  },
+  deleteEvTask(id) {
+    state.ev_tasks = state.ev_tasks.filter((x) => x.id !== id);
+    commit();
+    persist(() => run(sb.from('ev_tasks').delete().eq('id', id)));
+  },
+  // Nhập checklist từ file (Claude/skill): thay toàn bộ hoặc thêm vào
+  async importEvTasks(eventId, tasks, replace) {
+    const rows = tasks.map((t, i) => ({ id: uid(), event_id: eventId, status: 'todo', ...t, sort: (t.sort ?? i) + (replace ? 0 : 1000) }));
+    state.ev_tasks = [...state.ev_tasks.filter((x) => !(replace && x.event_id === eventId)), ...rows];
+    commit();
+    if (!LIVE) return;
+    if (replace) await run(sb.from('ev_tasks').delete().eq('event_id', eventId));
+    for (let i = 0; i < rows.length; i += 200) await run(sb.from('ev_tasks').insert(rows.slice(i, i + 200).map((x) => pick(x, EV_TASK_COLS))));
+  },
+  saveEvent(id, patch) {
+    state.events = state.events.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    commit();
+    persist(() => run(sb.from('ev_events').update(patch).eq('id', id)));
   },
 };

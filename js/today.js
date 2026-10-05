@@ -3,6 +3,7 @@ import { html, Modal, Badge, Bar, Seg, Empty, useNow, ConfirmButton } from './ui
 import { useState, useMemo, useEffect } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
 import { actions } from './store.js';
 import * as U from './util.js';
+import { EvRow, myEventTasks } from './events.js';
 
 export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, privacy = 'all', onPrivacy }) {
   useNow();
@@ -68,6 +69,10 @@ export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, pr
 
     ${locked && html`<div class="alert info">👆 Bấm <b>Bắt đầu ngày làm việc</b> để mở checklist hôm nay.</div>`}
 
+    ${isMe && isToday && privacy !== 'private' && myEventTasks(state, person.id).length > 0 && html`<section class="section">
+      <div class="section-head"><h2>🏆 Việc giải đấu của tôi (3 ngày tới & quá hạn)</h2></div>
+      <div class=${'ledger' + (locked ? ' dim' : '')}>${myEventTasks(state, person.id).map((t) => html`<${EvRow} key=${t.id} t=${t} ctx=${ctx} showEvent />`)}</div>
+    </section>`}
     <${Ledger} ctx=${ctx} tasks=${tasks} backlog=${backlog} date=${date} locked=${locked} editable=${canAct && !locked} viewOnly=${readOnly || !isMe} onMore=${setOpen} privacy=${privacy} />
 
     ${person.role === 'staff' && isToday && workday && privacy !== 'private' && html`<${ReportCard} ctx=${ctx} person=${person} report=${report} canAct=${canAct} date=${date} onOpen=${() => setShowReport(true)} />`}

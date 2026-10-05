@@ -9,6 +9,7 @@ import { WeekView, ReviewView } from './weekly.js';
 import { HabitsView } from './habits.js';
 import { SettingsView } from './manage.js';
 import { ChatPanel } from './chat.js';
+import { EventsView } from './events.js';
 import * as U from './util.js';
 
 const NAV = {
@@ -16,7 +17,8 @@ const NAV = {
     { id: 'today', label: 'Hôm nay', icon: '☀️' },
     { id: 'team', label: 'Team', icon: '👥' },
     { id: 'review', label: 'Duyệt BC', icon: '📨', badge: (s) => s.reports.filter((r) => r.status === 'submitted').length },
-    { id: 'stats', label: 'Thống kê', icon: '📊' },
+    { id: 'events', label: 'Giải đấu', icon: '🏆' },
+    { id: 'stats', label: 'Thống kê', icon: '📊', more: true },
     { id: 'kpi', label: 'KPI', icon: '🎯', more: true },
     { id: 'habits', label: 'Thói quen', icon: '🏃', more: true },
     { id: 'settings', label: 'Cài đặt', icon: '⚙️', more: true },
@@ -24,12 +26,14 @@ const NAV = {
   staff: [
     { id: 'today', label: 'Hôm nay', icon: '☀️' },
     { id: 'week', label: 'Tuần', icon: '📅' },
+    { id: 'events', label: 'Giải đấu', icon: '🏆' },
     { id: 'kpi', label: 'KPI', icon: '🎯' },
     { id: 'settings', label: 'Thông báo', icon: '🔔' },
   ],
   bod: [
     { id: 'team', label: 'Tổng quan', icon: '👥' },
     { id: 'lead', label: 'Quản lý', icon: '💼' },
+    { id: 'events', label: 'Giải đấu', icon: '🏆' },
     { id: 'stats', label: 'Thống kê', icon: '📊' },
     { id: 'kpi', label: 'KPI', icon: '🎯' },
   ],
@@ -137,6 +141,7 @@ function App({ meId, onSignOut }) {
       ${cur === 'lead' && html`<${LeadView} ctx=${ctx} lead=${lead} />`}
       ${cur === 'review' && html`<${ReviewView} ctx=${ctx} />`}
       ${cur === 'stats' && html`<${StatsView} ctx=${ctx} />`}
+      ${cur === 'events' && html`<${EventsView} ctx=${ctx} key=${me.id} />`}
       ${cur === 'kpi' && html`<${KpiView} ctx=${ctx} />`}
       ${cur === 'week' && html`<${WeekView} ctx=${ctx} key=${me.id} />`}
       ${cur === 'habits' && html`<${HabitsView} ctx=${ctx} />`}

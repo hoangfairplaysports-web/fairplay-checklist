@@ -136,6 +136,36 @@ async function runReminders(sent: string[]) {
     if (m) await send(`rev:${r.id}:${r.reviewed_at}`, m, r.status === 'approved' ? '✅ Báo cáo đã được duyệt' : '↩ Báo cáo bị trả lại', r.manager_note || (r.status === 'returned' ? 'Mở app để xem và nộp lại.' : ''), 'review');
   }
 
+  // 7b) Triển khai giải — 8:45: việc giải đấu của từng người (hạn hôm nay/mai hoặc quá hạn)
+  if (inWindow('08:45', '10:30') && !sunday) {
+    const tomorrow = addDays(today, 1);
+    const { data: evTasks } = await admin.from('ev_tasks').select('title, due_date, pic_id, event_id').neq('status', 'done').lte('due_date', tomorrow).not('pic_id', 'is', null);
+    const { data: evs } = await admin.from('ev_events').select('id, name, status').in('status', ['preparing', 'running']);
+    const evName = Object.fromEntries((evs ?? []).map((e) => [e.id, e.name]));
+    for (const m of members) {
+      const mine = (evTasks ?? []).filter((t) => t.pic_id === m.id && evName[t.event_id]);
+      if (!mine.length) continue;
+      const lines = mine.slice(0, 10).map((t) => `• ${t.due_date < today ? '⚠️ quá hạn ' : t.due_date === today ? 'hôm nay ' : 'mai '}${t.title} — ${evName[t.event_id]}`);
+      await send(`evtask:${m.id}:${today}`, m, `🏆 ${mine.length} việc giải đấu cần làm`, lines.join('\n'), 'evtask');
+    }
+  }
+
+  // 7c) Triển khai giải — 9:00: hợp đồng, khách thanh toán, trả nhà cung cấp (chỉ quản lý)
+  if (inWindow('09:00', '11:00') && !sunday) {
+    const soon = addDays(today, 2);
+    const [{ data: evs }, { data: pays }, { data: items }] = await Promise.all([
+      admin.from('ev_events').select('id, name, contract_signed_at, contract_deadline, status').in('status', ['preparing', 'running', 'done']),
+      admin.from('ev_payments').select('event_id, label, amount, due_date, status').neq('status', 'paid').lte('due_date', soon),
+      admin.from('ev_items').select('event_id, name, supplier_due, supplier_status, supplier_issue').eq('chosen', true).in('supplier_status', ['unpaid', 'partial']).lte('supplier_due', soon),
+    ]);
+    const name = Object.fromEntries((evs ?? []).map((e) => [e.id, e.name]));
+    const lines: string[] = [];
+    for (const e of evs ?? []) if (!e.contract_signed_at && e.contract_deadline && e.contract_deadline <= today && e.status !== 'done') lines.push(`📝 ${e.name}: ${e.contract_deadline < today ? 'QUÁ HẠN' : 'hôm nay hết hạn'} ký hợp đồng`);
+    for (const p of pays ?? []) if (name[p.event_id]) lines.push(`💰 ${name[p.event_id]}: ${p.label} ${p.due_date < today ? 'QUÁ HẠN' : 'đến hạn ' + p.due_date.slice(8, 10) + '/' + p.due_date.slice(5, 7)} — nhắc khách`);
+    for (const it of items ?? []) if (name[it.event_id]) lines.push(`🏭 ${name[it.event_id]}: trả NCC "${it.name}" ${it.supplier_due < today ? 'QUÁ HẠN' : 'đến hạn'}${it.supplier_issue ? ' — vướng: ' + it.supplier_issue : ''}`);
+    if (lines.length) for (const a of admins) await send(`evfin:${a.id}:${today}`, a, '🚀 Triển khai giải cần xử lý', lines.slice(0, 15).join('\n'), 'evfin');
+  }
+
   // 8) 8:30 — bản tin sáng cho quản lý (Telegram + app)
   if (inWindow('08:30', '09:00') && !sunday) {
     for (const a of admins) {

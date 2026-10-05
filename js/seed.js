@@ -1,4 +1,5 @@
 // Dữ liệu mẫu cho chế độ DEMO — tên người là hư cấu.
+import { generateChecklist, defaultPayments } from './ev-core.js';
 import { uid, todayStr, addDays, eachDay, weekday, recursOn, routineAppliesTo, isWorkday, DEFAULT_SETTINGS, weekStart } from './util.js';
 
 export const PEOPLE = [
@@ -200,4 +201,27 @@ export function makeSeed() {
     { role: 'bot', text: 'Chào bạn 👋 Mình là trợ lý Fairplay. Bạn có thể nhắn kiểu:\n• "Mai 3h chiều nhắc gọi chị Hoa MSB, quan trọng"\n• "Hôm nay còn gì?"\n• "Team hôm nay thế nào?"\n• "Sáng nay chạy 5km"', at: new Date().toISOString() },
   ];
   return state;
+}
+
+// Giải mẫu cho chế độ demo (không có số tiền ở phía Checklist)
+export function demoEvents(state) {
+  const today = todayStr();
+  const date = addDays(18);
+  const items = [
+    ['Khảo sát & tư vấn giải', 'Khảo sát nhu cầu khách hàng', null, ''], ['Thiết kế chuyên môn giải đấu', 'Xây điều lệ, thể thức', null, ''],
+    ['Họp kỹ thuật và bốc thăm', 'Bốc thăm online tại văn phòng Fairplay', 1, 'Gói'], ['Điều hành chung', '', 2, 'Nhân sự'],
+    ['Trọng tài Điều Hành', '', 10, 'người'], ['Y tế', '', 1, 'người'], ['Backdrop', 'Back drop sân thi đấu 4x6m', 24, 'm2'],
+    ['Standee', 'Standee chân chữ X', 4, 'Chiếc'], ['Dụng cụ thi đấu', 'Bóng Pickleball thi đấu', 12, 'Hộp'], ['Nước lọc', 'Lavie', 5, 'Thùng'],
+    ['Cup vô địch', '', 4, 'Chiếc'], ['Chụp ảnh', '', 2, 'Máy'], ['Hệ thống âm thanh', '', 1, 'Gói'],
+  ].map(([name, detail, qty, unit]) => ({ name, detail, qty, unit, section: '', grp: '', is_option: false, chosen: true }));
+  const ev = { id: 'ev_demo', name: 'Giải Pickleball & Cầu lông TITAN 2026', client_name: 'Titan Corporation', sport: 'Pickleball', venue: 'Bắc Ninh', event_date: date, status: 'preparing', pm_id: 'u_admin', contract_signed_at: addDays(-3), contract_deadline: addDays(-5) };
+  const staff = ['u_mai', 'u_kiet', 'u_bao', 'u_ha'];
+  const picFor = (cat) => (/design|san xuat|truyen thong/i.test(cat) ? 'u_mai' : /nhan su|ky thuat/i.test(cat) ? 'u_bao' : /thiet bi|giai thuong|an uong/i.test(cat) ? 'u_kiet' : 'u_admin');
+  const tasks = generateChecklist({ items, eventDate: date, today, payments: defaultPayments(100000000, date) }).map((t, i) => ({
+    ...t, id: uid(), event_id: ev.id, pic_id: picFor(t.category.normalize('NFD').replace(/[\u0300-\u036f]/g, '')), sort: i,
+    status: t.due_date < today ? 'done' : 'todo',
+  }));
+  tasks.filter((t) => /Hợp đồng/.test(t.category) && /Ký hợp đồng/.test(t.title)).forEach((t) => (t.status = 'done'));
+  void staff;
+  return { events: [ev], ev_tasks: tasks };
 }
