@@ -150,8 +150,10 @@ create table if not exists public.cl_tasks (
   assigned_by uuid references public.cl_members (id) on delete set null,
   created_at timestamptz not null default now(),
   done_at timestamptz,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  hidden boolean not null default false
 );
+alter table public.cl_tasks add column if not exists hidden boolean not null default false;
 create unique index if not exists cl_tasks_routine_uq on public.cl_tasks (routine_id, owner_id, date) where routine_id is not null;
 create index if not exists cl_tasks_owner_date on public.cl_tasks (owner_id, date);
 create index if not exists cl_tasks_open on public.cl_tasks (owner_id) where status <> 'done';
@@ -167,11 +169,12 @@ begin
     new.created_at := old.created_at;
     if auth.uid() is not null and not public.cl_is_admin() then
       new.owner_id := old.owner_id; new.source := old.source; new.assigned_by := old.assigned_by;
-      new.routine_id := old.routine_id; new.scope := old.scope;
+      new.routine_id := old.routine_id; new.scope := old.scope; new.hidden := old.hidden;
       if old.source in ('routine', 'meeting', 'assigned') then new.title := old.title; new.date := old.date; end if;
     end if;
   elsif auth.uid() is not null and not public.cl_is_admin() then
     if new.source = 'assigned' then new.source := 'adhoc'; new.assigned_by := null; end if;
+    new.hidden := false;
   end if;
   if new.scope = 'private' and (new.source = 'assigned' or new.owner_id <> coalesce(auth.uid(), new.owner_id)) then
     raise exception 'Việc riêng chỉ chủ tài khoản tự tạo';

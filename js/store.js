@@ -247,7 +247,14 @@ export const actions = {
     commit();
     persist(() => run(sb.from('cl_tasks').update(toDb(pick(patch, TASK_COLS))).eq('id', id)));
   },
-  deleteTask(id) {
+  // soft = true: chỉ ẩn (dùng cho việc routine/họp để không bị sinh lại)
+  deleteTask(id, soft = false) {
+    if (soft) {
+      state.tasks = state.tasks.map((x) => (x.id === id ? { ...x, hidden: true } : x));
+      commit();
+      persist(() => run(sb.from('cl_tasks').update({ hidden: true }).eq('id', id)));
+      return;
+    }
     state.tasks = state.tasks.filter((x) => x.id !== id);
     commit();
     persist(() => run(sb.from('cl_tasks').delete().eq('id', id)));

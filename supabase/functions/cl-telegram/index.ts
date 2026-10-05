@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 async function todayList(m: Member) {
   const today = vnNow().date;
   const { data } = await admin.from('cl_tasks').select('title, time, status, due_date, source, date, scope')
-    .eq('owner_id', m.id).lte('date', today).neq('status', 'done');
+    .eq('owner_id', m.id).eq('hidden', false).lte('date', today).neq('status', 'done');
   const list = (data ?? []).filter((t) => !(['routine', 'meeting'].includes(t.source) && t.date !== today))
     .sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
   if (!list.length) return 'Hôm nay bạn không còn việc nào 🎉';

@@ -127,7 +127,7 @@ async function exec(me: Member, name: string, a: Args) {
       if (!p) return { error: `Không tìm thấy nhân viên "${a.person}"` };
       owner = p;
     }
-    let q = admin.from('cl_tasks').select('id, title, date, time, due_date, status, progress, note, block_reason, scope, source, priority').eq('owner_id', owner.id);
+    let q = admin.from('cl_tasks').select('id, title, date, time, due_date, status, progress, note, block_reason, scope, source, priority').eq('owner_id', owner.id).eq('hidden', false);
     if (owner.id !== me.id) q = q.eq('scope', 'work');
     const { data } = await q.lte('date', date).or(`status.neq.done,date.eq.${date}`);
     const rows = (data ?? []).filter((t) => t.date === date || ['routine', 'meeting'].includes(t.source) === false || t.date === date)
@@ -169,7 +169,7 @@ async function exec(me: Member, name: string, a: Args) {
     const staff = people.filter((m) => m.role === 'staff');
     const [{ data: starts }, { data: tasks }, { data: reps }, { data: settings }] = await Promise.all([
       admin.from('cl_daystarts').select('person_id, started_at').eq('date', date),
-      admin.from('cl_tasks').select('owner_id, title, status, due_date, block_reason, need_help, source, date').eq('scope', 'work').lte('date', date).or(`status.neq.done,date.eq.${date}`),
+      admin.from('cl_tasks').select('owner_id, title, status, due_date, block_reason, need_help, source, date').eq('scope', 'work').eq('hidden', false).lte('date', date).or(`status.neq.done,date.eq.${date}`),
       admin.from('cl_reports').select('person_id, status, submitted_at').eq('date', date),
       admin.from('cl_settings').select('data').eq('id', 1).maybeSingle(),
     ]);

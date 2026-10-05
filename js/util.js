@@ -203,7 +203,7 @@ const doneDate = (t) => (t.done_at ? dateStr(new Date(t.done_at)) : null);
 // - việc phát sinh / được giao / kế hoạch: hiện từ ngày bắt đầu đến khi xong (tự dời sang hôm sau)
 export function tasksForDay(state, pid, date, { includePrivate = true } = {}) {
   return state.tasks.filter((t) => {
-    if (t.owner_id !== pid) return false;
+    if (t.owner_id !== pid || t.hidden) return false;
     if (!includePrivate && t.scope === 'private') return false;
     if (t.source === 'routine' || t.source === 'meeting') return t.date === date;
     if (t.date > date) return false;
@@ -299,7 +299,7 @@ export function personStats(state, p, from, to) {
     }
   }
   for (const t of state.tasks) {
-    if (t.owner_id !== p.id || t.scope === 'private') continue;
+    if (t.owner_id !== p.id || t.scope === 'private' || t.hidden) continue;
     if (t.source === 'routine' || t.source === 'meeting') {
       if (t.date < from || t.date > end) continue;
       s.routines++;

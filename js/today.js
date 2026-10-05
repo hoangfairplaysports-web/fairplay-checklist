@@ -1,5 +1,5 @@
 // Màn hình "Hôm nay": checklist của 1 người + bắt đầu ngày + chốt báo cáo.
-import { html, Modal, Badge, Bar, Seg, Empty, useNow } from './ui.js';
+import { html, Modal, Badge, Bar, Seg, Empty, useNow, ConfirmButton } from './ui.js';
 import { useState, useMemo, useEffect } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
 import { actions } from './store.js';
 import * as U from './util.js';
@@ -337,6 +337,7 @@ export function TaskSheet({ ctx, task, preset, readOnly, onClose }) {
         <dt>Bắt đầu</dt><dd>${U.fmtDate(task.date)}</dd>
         ${task.done_at && html`<dt>Xong lúc</dt><dd>${U.fmtTime(task.done_at)} ${U.fmtShort(U.dateStr(new Date(task.done_at)))}</dd>`}
       </dl>
+      <div class="row mt"><${DeleteTask} ctx=${ctx} task=${task} onDone=${onClose} /></div>
     </${Modal}>`;
   return html`<${Modal} title=${task.title} onClose=${onClose}>
     <div class="form">
@@ -358,11 +359,30 @@ export function TaskSheet({ ctx, task, preset, readOnly, onClose }) {
         <label>Ưu tiên<select value=${f.priority} onChange=${set('priority')}>${Object.entries(U.PRIORITIES).map(([k, p]) => html`<option value=${k}>${p.icon} ${p.label}</option>`)}</select></label>
       </div>`}
       <div class="row between">
-        ${editableMeta && task.source !== 'assigned' ? html`<button class="link danger" onClick=${() => { actions.deleteTask(task.id); onClose(); }}>Xoá việc</button>` : html`<span></span>`}
+        <${DeleteTask} ctx=${ctx} task=${task} onDone=${onClose} />
         <div class="row"><button class="btn" onClick=${onClose}>Huỷ</button><button class="btn primary" onClick=${save}>Lưu</button></div>
       </div>
     </div>
   </${Modal}>`;
+}
+
+// Ai được xoá: chủ việc với việc tự thêm (phát sinh/kế hoạch); quản lý với mọi việc công ty.
+// Việc routine/họp chỉ "bỏ" riêng ngày đó (ẩn đi), routine vẫn lặp các ngày sau.
+function DeleteTask({ ctx, task, onDone }) {
+  const { me } = ctx;
+  const isAdmin = me.role === 'admin';
+  const own = task.owner_id === me.id;
+  const recurring = task.source === 'routine' || task.source === 'meeting';
+  const allowed = (isAdmin && (task.scope === 'work' || own)) || (own && (task.source === 'adhoc' || task.source === 'plan'));
+  if (!allowed)
+    return html`<span class="muted small">${task.source === 'assigned' ? 'Việc được giao — chỉ quản lý xoá được.' : recurring ? 'Việc lặp lại do quản lý đặt — nhờ quản lý bỏ nếu hôm nay không cần làm.' : ''}</span>`;
+  const label = recurring ? 'Bỏ việc này hôm nay' : 'Xoá việc';
+  const ask = recurring ? 'Bấm lần nữa để bỏ (các ngày sau vẫn lặp)' : 'Bấm lần nữa để xoá';
+  return html`<${ConfirmButton} label=${'🗑 ' + label} ask=${ask} onConfirm=${() => {
+    actions.deleteTask(task.id, recurring);
+    ctx.notify(recurring ? 'Đã bỏ việc này cho hôm nay' : 'Đã xoá việc');
+    onDone();
+  }} />`;
 }
 
 function ReportCard({ ctx, person, report, canAct, date, onOpen }) {

@@ -54,7 +54,7 @@ async function runReminders(sent: string[]) {
 
   // 1) Nhắc việc có giờ: trước 10–15 phút
   const { data: timed } = await admin.from('cl_tasks').select('id, owner_id, title, time, status, scope')
-    .eq('date', today).neq('status', 'done').not('time', 'is', null);
+    .eq('date', today).eq('hidden', false).neq('status', 'done').not('time', 'is', null);
   for (const t of timed ?? []) {
     const diff = toMin(t.time) - now.minutes;
     const m = members.find((x) => x.id === t.owner_id);
@@ -84,7 +84,7 @@ async function runReminders(sent: string[]) {
 
     // 4) 9:00 — nhắc việc quá hạn
     if (inWindow('09:00', '10:30')) {
-      const { data: overdue } = await admin.from('cl_tasks').select('owner_id, title').lt('due_date', today).neq('status', 'done');
+      const { data: overdue } = await admin.from('cl_tasks').select('owner_id, title').lt('due_date', today).eq('hidden', false).neq('status', 'done');
       for (const m of members.filter((x) => x.role !== 'bod' && working(x))) {
         const mine = (overdue ?? []).filter((t) => t.owner_id === m.id);
         if (mine.length)
@@ -139,7 +139,7 @@ async function runReminders(sent: string[]) {
   // 8) 8:30 — bản tin sáng cho quản lý (Telegram + app)
   if (inWindow('08:30', '09:00') && !sunday) {
     for (const a of admins) {
-      const { data: mine } = await admin.from('cl_tasks').select('title, time, status, due_date, scope').eq('owner_id', a.id).neq('status', 'done').lte('date', today);
+      const { data: mine } = await admin.from('cl_tasks').select('title, time, status, due_date, scope').eq('owner_id', a.id).eq('hidden', false).neq('status', 'done').lte('date', today);
       const list = (mine ?? []).sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99'));
       const yesterday = addDays(today, dowOf(today) === 1 ? -2 : -1);
       const { data: yRep } = await admin.from('cl_reports').select('person_id').eq('date', yesterday);
