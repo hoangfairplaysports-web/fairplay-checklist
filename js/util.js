@@ -193,6 +193,33 @@ export function startStatus(startedAt, settings) {
   return { cls: 'bad', label, icon: '‼' };
 }
 
+// Vị trí lúc bấm Bắt đầu (máy chủ gắn nhãn, xem migration_06_checkin.sql)
+export const LOCS = {
+  office_wifi: { icon: '🏢', label: 'Tại văn phòng', cls: 'ok', hint: 'Mạng wifi văn phòng' },
+  office_gps: { icon: '🏢', label: 'Tại văn phòng', cls: 'ok', hint: 'Theo định vị GPS' },
+  outside: { icon: '📍', label: 'Ngoài văn phòng', cls: 'bad', hint: 'Không dùng wifi văn phòng, GPS ngoài bán kính' },
+  unknown: { icon: '❔', label: 'Chưa rõ vị trí', cls: 'warn', hint: 'Không dùng wifi văn phòng và không cho phép định vị' },
+  wfh: { icon: '🏠', label: 'WFH', cls: 'info', hint: 'Thứ 7 làm tại nhà' },
+};
+export function locInfo(st) {
+  if (!st || !st.loc) return null;
+  const l = LOCS[st.loc];
+  if (!l) return null;
+  const dist = st.distance_m != null ? (st.distance_m >= 1000 ? `${(st.distance_m / 1000).toFixed(1)} km` : `${st.distance_m} m`) : '';
+  return { ...l, title: l.hint + (dist ? ` · cách văn phòng ${dist}` : ''), dist };
+}
+// Lấy GPS 1 lần; lỗi / từ chối / quá giờ → null (không bao giờ ném lỗi)
+export function getPosition(timeout = 8000) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: Math.round(p.coords.accuracy) }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout, maximumAge: 60000 }
+    );
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Công việc trong ngày
 // ---------------------------------------------------------------------------
