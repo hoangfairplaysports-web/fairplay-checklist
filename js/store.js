@@ -185,6 +185,8 @@ export async function loadLive() {
     habits,
     habit_logs: habitLogs,
     chat: chat.reverse(),
+    // có quyền vào Fairplay CRM không (profiles dùng chung với CRM) → hiện nút chuyển nhanh
+    crm_access: await sb.from('profiles').select('crm_access, active').eq('id', meId).maybeSingle().then((r) => !!(r.data && r.data.active !== false && r.data.crm_access), () => false),
     events,
     ev_tasks: evTasks,
     loadedAt: Date.now(),

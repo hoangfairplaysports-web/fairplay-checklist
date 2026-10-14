@@ -431,3 +431,6 @@ code { background: #eef3f8; padding: 1px 6px; border-radius: 4px; font-size: 12.
 .checkin-rules .chip { cursor: default; display: inline-flex; align-items: center; gap: 4px; font-family: ui-monospace, monospace; }
 .checkin-rules .chip .x { border: 0; background: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; color: var(--muted, #888); }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--brand); cursor: pointer; font: inherit; text-decoration: underline; }
+
+/* Nút chuyển nhanh Checklist ↔ CRM (cùng tài khoản, mở ngay trong tab này) */
+.appswitch { flex: none; text-decoration: none; white-space: nowrap; font-weight: 600; padding: 5px 10px; font-size: 13px; }

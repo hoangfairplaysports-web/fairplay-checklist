@@ -113,6 +113,7 @@ function App({ meId, onSignOut }) {
     </div>`}
     <header class="topbar">
       <div class="brand"><img src="assets/logo-mark.png" alt="" /><div class="wordmark"><b>FAIRPLAY</b><small>CHECKLIST</small></div></div>
+      ${(LIVE ? state.crm_access : me.role !== 'bod') && html`<a class="btn appswitch" href="https://hoangfairplaysports-web.github.io/fairplay-crm/" title="Mở Fairplay CRM (cùng tài khoản)">💼 CRM</a>`}
       <nav class="tabs">
         ${nav.map((n) => html`<a href=${'#' + n.id} class=${(cur === n.id ? 'on ' : '') + (n.more ? 'more-item' : '')} onClick=${(e) => { e.preventDefault(); go(n.id); }}>
           <span class="ic">${n.icon}</span><span>${n.label}</span>${n.badge && n.badge(state) > 0 && html`<i class="nbadge">${n.badge(state)}</i>`}</a>`)}
