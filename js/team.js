@@ -118,6 +118,7 @@ export function PersonDrawer({ ctx, person, date, onClose }) {
   const weekly = state.weekly.find((w) => w.person_id === person.id && w.week === ws);
   const [from, to] = U.periodRange('month', date);
   const st = U.personStats(state, person, from, to);
+  const [wk, setWk] = useState(ws);
   return html`<div class="drawer-overlay" onMouseDown=${(e) => e.target === e.currentTarget && onClose()}>
     <aside class="drawer">
       <div class="drawer-head">
@@ -125,7 +126,7 @@ export function PersonDrawer({ ctx, person, date, onClose }) {
         <button class="x" onClick=${onClose}>×</button>
       </div>
       <div class="drawer-tabs">
-        ${[['day', 'Checklist ' + U.fmtShort(date)], ['report', 'Báo cáo'], ['kpi', 'KPI'], ['month', 'Tháng này']].map(([k, l]) => html`<button class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${l}</button>`)}
+        ${[['day', 'Checklist ' + U.fmtShort(date)], ['report', 'Báo cáo'], ['kpi', 'KPI'], ['week', 'Tuần này'], ['month', 'Tháng này']].map(([k, l]) => html`<button class=${tab === k ? 'on' : ''} onClick=${() => setTab(k)}>${l}</button>`)}
       </div>
       <div class="drawer-body">
         ${tab === 'day' && html`<${DayView} ctx=${ctx} person=${person} date=${date} readOnly />`}
@@ -150,7 +151,15 @@ export function PersonDrawer({ ctx, person, date, onClose }) {
           </div>`}
         </div>`}
         ${tab === 'kpi' && html`<${KpiList} ctx=${ctx} ownerId=${person.id} at=${date} />`}
-        ${tab === 'month' && html`<div class="stats">
+        ${tab === 'week' && html`<${WeekTab} ctx=${ctx} person=${person} wk=${wk} setWk=${setWk} />`}
+        ${tab === 'month' && html`<${PersonStatCards} person=${person} st=${st} />`}
+      </div>
+    </aside>
+  </div>`;
+}
+
+function PersonStatCards({ person, st }) {
+  return html`<div class="stats">
           <${Stat} value=${st.workdays} label="Ngày làm việc" sub=${st.leaveDays ? `${st.leaveDays} ngày nghỉ` : ''} />
           <${Stat} value=${st.onTimePct != null ? st.onTimePct + '%' : '—'} label="Bắt đầu đúng giờ" cls=${U.pctCls(st.onTimePct)} />
           <${Stat} value=${st.avgStart ? U.hm(st.avgStart) : '—'} label="Giờ bắt đầu TB" />
@@ -159,9 +168,50 @@ export function PersonDrawer({ ctx, person, date, onClose }) {
           <${Stat} value=${st.missedRoutine} label="Routine bị miss" cls=${st.missedRoutine ? 'warn' : ''} />
           <${Stat} value=${st.overdue} label="Việc trễ hạn" cls=${st.overdue ? 'bad' : ''} />
           ${person.role === 'staff' && html`<${Stat} value=${st.reportPct != null ? st.reportPct + '%' : '—'} label="Báo cáo đúng hạn" cls=${U.pctCls(st.reportPct)} sub=${st.reportsMissing ? `${st.reportsMissing} lần không nộp` : ''} />`}
-        </div>`}
-      </div>
-    </aside>
+        </div>`;
+}
+
+// Tab "Tuần này": số liệu cả tuần + từng ngày + báo cáo tuần + KPI - dùng cho họp tuần
+function WeekTab({ ctx, person, wk, setWk }) {
+  const { state, me } = ctx;
+  const [from, to] = U.periodRange('week', wk);
+  const today = U.todayStr();
+  const st = U.personStats(state, person, from, to);
+  const weekly = state.weekly.find((w) => w.person_id === person.id && w.week === from);
+  const days = [0, 1, 2, 3, 4, 5].map((i) => U.addDays(i, from));
+  const thisWeek = U.weekStart(today) === from;
+  return html`<div class="grid1">
+    <div class="row between">
+      <button class="btn" onClick=${() => setWk(U.addDays(-7, wk))}>‹ Tuần trước</button>
+      <b>${thisWeek ? 'Tuần này' : 'Tuần'} ${U.fmtShort(from)} - ${U.fmtShort(to)}</b>
+      <button class="btn" disabled=${thisWeek} onClick=${() => setWk(U.addDays(7, wk))}>Tuần sau ›</button>
+    </div>
+    <${PersonStatCards} person=${person} st=${st} />
+    <div class="table-wrap"><table class="table compact">
+      <thead><tr><th>Ngày</th><th>Bắt đầu</th><th class="num">Việc xong</th>${person.role === 'staff' && html`<th>Báo cáo</th>`}</tr></thead>
+      <tbody>${days.map((d) => {
+        if (d > today) return html`<tr><td>${U.wdShort(d)} ${U.fmtShort(d)}</td><td colspan="3" class="muted">-</td></tr>`;
+        if (!U.isWorkday(state, person.id, d)) return html`<tr><td>${U.wdShort(d)} ${U.fmtShort(d)}</td><td colspan="3" class="muted">Nghỉ</td></tr>`;
+        const ds = state.daystarts.find((x) => x.person_id === person.id && x.date === d);
+        const ss = ds && U.startStatus(ds.started_at, state.settings);
+        const s1 = U.personStats(state, person, d, d);
+        const r = state.reports.find((x) => x.person_id === person.id && x.date === d);
+        const rep = U.weekday(d) === 6 ? html`<span class="muted">-</span>`
+          : !r ? (d < today ? html`<${Badge} cls="bad">Không nộp</${Badge}>` : html`<span class="muted">Chưa nộp</span>`)
+          : html`<span>${U.fmtTime(r.submitted_at)}${r.status === 'approved' ? ' ✓' : r.status === 'returned' ? ' ↩' : ''}</span>`;
+        return html`<tr>
+          <td>${U.wdShort(d)} ${U.fmtShort(d)}</td>
+          <td>${ds ? html`<${Badge} cls=${ss.cls}>${U.fmtTime(ds.started_at)}</${Badge}>` : html`<span class="muted">${d < today ? 'Không bắt đầu' : '-'}</span>`}</td>
+          <td class="num">${s1.tasks ? `${s1.done}/${s1.tasks}` : '-'}</td>
+          ${person.role === 'staff' && html`<td>${rep}</td>`}
+        </tr>`;
+      })}</tbody>
+    </table></div>
+    ${person.role === 'staff' && html`<div class="card pad"><b>Báo cáo tuần ${U.fmtShort(from)}</b>
+      ${weekly ? html`<${WeeklyBody} w=${weekly} />` : html`<p class="muted">Chưa nộp.</p>`}
+      ${me.role === 'admin' && weekly?.status === 'submitted' && html`<div class="row end"><button class="btn primary" onClick=${() => actions.reviewWeekly(weekly.id, 'approved')}>✓ Xác nhận báo cáo tuần</button></div>`}
+    </div>`}
+    <div><b>KPI</b><${KpiList} ctx=${ctx} ownerId=${person.id} at=${to < today ? to : today} /></div>
   </div>`;
 }
 
