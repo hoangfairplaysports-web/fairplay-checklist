@@ -141,11 +141,11 @@ async function runReminders(sent: string[]) {
   // 7b) Triển khai giải — 8:45: việc giải đấu của từng người (hạn hôm nay/mai hoặc quá hạn)
   if (inWindow('08:45', '10:30') && !sunday) {
     const tomorrow = addDays(today, 1);
-    const { data: evTasks } = await admin.from('ev_tasks').select('title, due_date, pic_id, event_id').neq('status', 'done').lte('due_date', tomorrow).not('pic_id', 'is', null);
+    const { data: evTasks } = await admin.from('ev_tasks').select('title, due_date, pic_id, pic_ids, event_id').neq('status', 'done').lte('due_date', tomorrow).not('pic_id', 'is', null);
     const { data: evs } = await admin.from('ev_events').select('id, name, status').in('status', ['preparing', 'running']);
     const evName = Object.fromEntries((evs ?? []).map((e) => [e.id, e.name]));
     for (const m of members) {
-      const mine = (evTasks ?? []).filter((t) => t.pic_id === m.id && evName[t.event_id]);
+      const mine = (evTasks ?? []).filter((t) => (t.pic_id === m.id || (t.pic_ids ?? []).includes(m.id)) && evName[t.event_id]);
       if (!mine.length) continue;
       const lines = mine.slice(0, 10).map((t) => `• ${t.due_date < today ? '⚠️ quá hạn ' : t.due_date === today ? 'hôm nay ' : 'mai '}${t.title} — ${evName[t.event_id]}`);
       await send(`evtask:${m.id}:${today}`, m, `🏆 ${mine.length} việc giải đấu cần làm`, lines.join('\n'), 'evtask');
