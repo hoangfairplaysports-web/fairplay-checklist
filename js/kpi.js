@@ -27,8 +27,8 @@ function KpiRow({ ctx, k, at: ref, onEdit }) {
     <div class="row small muted">
       <span>${U.fmtShort(prog.from)} – ${U.fmtShort(prog.to)}</span>
       ${k.type === 'bool' && isAdmin && html`<button class="link" onClick=${() => actions.setKpiManual(k.id, prog.from, !prog.value)}>${prog.value ? 'Đánh dấu chưa xong' : 'Đánh dấu đã xong'}</button>`}
-      ${k.type === 'percent' && isAdmin && html`<span class="row">Cập nhật: <input class="mini-in" type="number" min="0" max="100" value=${prog.value} onChange=${(e) => actions.setKpiManual(k.id, prog.from, Number(e.target.value) || 0)} />%</span>`}
-      ${k.type === 'count' && html`<span>· tự cộng từ checklist</span>`}
+      ${k.type === 'percent' && isAdmin && !k.crm_metric && html`<span class="row">Cập nhật: <input class="mini-in" type="number" min="0" max="100" value=${prog.value} onChange=${(e) => actions.setKpiManual(k.id, prog.from, Number(e.target.value) || 0)} />%</span>`}
+      ${k.crm_metric ? html`<span>· 🎯 tự đếm từ CRM</span>` : k.type === 'count' && html`<span>· tự cộng từ checklist</span>`}
       ${onEdit && html`<button class="link push" onClick=${() => onEdit(k)}>Sửa</button>`}
     </div>
   </div>`;
@@ -76,7 +76,7 @@ export function KpiView({ ctx }) {
 function KpiForm({ ctx, k, onClose }) {
   const { state } = ctx;
   const staff = state.people.filter((p) => p.role === 'staff' && p.active !== false);
-  const [f, setF] = useState({ title: '', owner_id: staff[0]?.id, type: 'count', target: 5, period: 'week', unit: '', applyAll: false, routine_ids: [], ...k });
+  const [f, setF] = useState({ title: '', owner_id: staff[0]?.id, type: 'count', target: 5, period: 'week', unit: '', applyAll: false, routine_ids: [], crm_metric: '', ...k });
   const set = (key) => (e) => setF({ ...f, [key]: e.target ? e.target.value : e });
   const owner = state.people.find((p) => p.id === f.owner_id);
   const routines = state.routines.filter((r) => r.kind !== 'meeting' && (r.owner_id === f.owner_id || r.dept === owner?.dept));
@@ -88,7 +88,7 @@ function KpiForm({ ctx, k, onClose }) {
     if (!f.title.trim()) return;
     const targets = f.applyAll && !k.id ? staff.filter((p) => p.dept === owner.dept) : [owner];
     const key = k.key || f.title.trim().toLowerCase().replace(/\s+/g, '_');
-    for (const p of targets) actions.saveKpi({ id: k.id, key, title: f.title.trim(), owner_id: p.id, type: f.type, target: Number(f.target) || 1, period: f.period, unit: f.unit }, f.routine_ids);
+    for (const p of targets) actions.saveKpi({ id: k.id, key, title: f.title.trim(), owner_id: p.id, type: f.type, target: Number(f.target) || 1, period: f.period, unit: f.unit, crm_metric: f.type === 'bool' ? null : f.crm_metric || null }, f.crm_metric ? [] : f.routine_ids);
     ctx.notify(k.id ? 'Đã lưu KPI' : `Đã thêm KPI cho ${targets.length} người`);
     onClose();
   }
@@ -104,7 +104,9 @@ function KpiForm({ ctx, k, onClose }) {
         ${f.type === 'count' && html`<label>Đơn vị<input value=${f.unit} onInput=${set('unit')} placeholder="bài, video…" /></label>`}
         <label>Chu kỳ<select value=${f.period} onChange=${set('period')}>${Object.entries(U.KPI_PERIODS).map(([key, l]) => html`<option value=${key}>Mỗi ${l}</option>`)}</select></label>
       </div>
-      ${f.type === 'count' && routines.length > 0 && html`<div><b class="small">Tự cộng từ routine nào?</b>
+      ${f.type !== 'bool' && html`<label>Tự đếm từ CRM (Tìm khách mới)<select value=${f.crm_metric || ''} onChange=${(e) => setF({ ...f, crm_metric: e.target.value, ...(e.target.value === 'touch_ontime_pct' ? { type: 'percent', unit: '' } : {}) })}>
+        <option value="">Không, đếm theo checklist / nhập tay</option>${Object.entries(U.CRM_METRICS).map(([key, l]) => html`<option value=${key}>${l}</option>`)}</select></label>`}
+      ${f.type === 'count' && !f.crm_metric && routines.length > 0 && html`<div><b class="small">Tự cộng từ routine nào?</b>
         <div class="chips">${routines.map((r) => html`<button type="button" class=${'chip ' + (f.routine_ids.includes(r.id) ? 'on' : '')}
           onClick=${() => setF({ ...f, routine_ids: f.routine_ids.includes(r.id) ? f.routine_ids.filter((x) => x !== r.id) : [...f.routine_ids, r.id] })}>${r.title}</button>`)}</div></div>`}
       <div class="row between">

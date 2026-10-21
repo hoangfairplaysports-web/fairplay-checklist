@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'https://cdn.jsdelivr.net/npm/htm@3
 import { actions } from './store.js';
 import * as U from './util.js';
 import { EvRow, myEventTasks } from './events.js';
+import { CrmBlock } from './crm-block.js';
 
 export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, privacy = 'all', onPrivacy }) {
   useNow();
@@ -452,6 +453,7 @@ function ReportModal({ ctx, person, date, onClose }) {
         ${!undone.length && html`<p class="muted">Tuyệt vời, không còn việc tồn.</p>`}
       </section>
       ${adhoc.length > 0 && html`<section><h3>3 · Việc phát sinh trong ngày</h3><ul class="rlist">${adhoc.map((t) => html`<li>${U.STATUS[t.status].icon} ${t.title}</li>`)}</ul></section>`}
+      <${CrmBlock} state=${state} person=${person} from=${date} to=${date} title="Tìm khách mới trong ngày" />
       <label>🚧 Vướng mắc / cần hỗ trợ từ ai?<textarea rows="2" value=${blockers} onInput=${(e) => setBlockers(e.target.value)}></textarea></label>
       <div><b>📋 Kế hoạch ngày mai</b> <span class="muted small">(${autoTomorrow} việc routine đã có sẵn — ghi thêm việc cụ thể)</span>
         ${plan.map((p, i) => html`<input class="planin" value=${p} placeholder=${`${i + 1}. Việc cụ thể…`} onInput=${(e) => setPlan(plan.map((x, j) => (j === i ? e.target.value : x)))} />`)}

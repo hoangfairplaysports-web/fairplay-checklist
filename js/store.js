@@ -102,7 +102,7 @@ const TASK_COLS = ['id', 'owner_id', 'title', 'date', 'time', 'end_time', 'due_d
   'progress', 'output', 'qty', 'note', 'block_reason', 'need_help', 'kpi_id', 'assigned_by'];
 const ROUTINE_COLS = ['id', 'title', 'owner_id', 'dept', 'repeat', 'days', 'month_day', 'time', 'end_time', 'kind', 'priority', 'scope', 'group', 'kpi_key', 'active'];
 const EV_TASK_COLS = ['id', 'event_id', 'phase', 'category', 'title', 'detail', 'pic_id', 'pic_ids', 'pic_name', 'sup_client', 'sup_fp', 'offset_days', 'due_date', 'status', 'note', 'item_id', 'sort'];
-const KPI_COLS = ['id', 'key', 'title', 'owner_id', 'type', 'target', 'period', 'unit', 'manual', 'active'];
+const KPI_COLS = ['id', 'key', 'title', 'owner_id', 'type', 'target', 'period', 'unit', 'manual', 'active', 'crm_metric'];
 
 export const auth = {
   async session() {
@@ -189,6 +189,8 @@ export async function loadLive() {
     crm_access: await sb.from('profiles').select('crm_access, active').eq('id', meId).maybeSingle().then((r) => !!(r.data && r.data.active !== false && r.data.crm_access), () => false),
     events,
     ev_tasks: evTasks,
+    // Số liệu tìm khách mới từ CRM (KPI tự đếm, báo cáo ngày, tab Tuần này)
+    crmStats: await sb.rpc('cl_crm_stats', { p_from: since, p_to: addDays(1) }).then((r) => r.data || [], () => []),
     loadedAt: Date.now(),
   };
   commit();

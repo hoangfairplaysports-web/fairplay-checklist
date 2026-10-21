@@ -5,6 +5,7 @@ import { actions } from './store.js';
 import { DayView, TaskForm, TaskRow } from './today.js';
 import { KpiList } from './kpi.js';
 import * as U from './util.js';
+import { CrmBlock } from './crm-block.js';
 
 export function TeamView({ ctx }) {
   useNow();
@@ -187,6 +188,7 @@ function WeekTab({ ctx, person, wk, setWk }) {
       <button class="btn" disabled=${thisWeek} onClick=${() => setWk(U.addDays(7, wk))}>Tuần sau ›</button>
     </div>
     <${PersonStatCards} person=${person} st=${st} />
+    <${CrmBlock} state=${state} person=${person} from=${from} to=${to} title="Tìm khách mới trong tuần" />
     <div class="table-wrap"><table class="table compact">
       <thead><tr><th>Ngày</th><th>Bắt đầu</th><th class="num">Việc xong</th>${person.role === 'staff' && html`<th>Báo cáo</th>`}</tr></thead>
       <tbody>${days.map((d) => {
@@ -224,6 +226,7 @@ export function ReportBody({ state, person, date, report }) {
     <ul class="rlist">${done.map((t) => html`<li>${t.title}${t.output ? html` — <span class="muted">${t.output}</span>` : ''}${t.note ? html` <span class="muted">· ${t.note}</span>` : ''}</li>`)}</ul>
     ${undone.length > 0 && html`<h4>⏳ Chưa hoàn thành (${undone.length})</h4>
       <ul class="rlist">${undone.map((t) => html`<li>${U.STATUS[t.status].icon} ${t.title}${t.block_reason ? html` — <span class="bad-t">${t.block_reason}</span>` : ''}</li>`)}</ul>`}
+    <${CrmBlock} state=${state} person=${person} from=${date} to=${date} title="Tìm khách mới trong ngày" />
     ${report.blockers && html`<h4>🚧 Vướng mắc</h4><p class="pre">${report.blockers}</p>`}
     ${report.plan && html`<h4>📋 Kế hoạch ngày mai</h4><ul class="rlist">${report.plan.split('\n').map((x) => html`<li>${x}</li>`)}</ul>`}
   </div>`;

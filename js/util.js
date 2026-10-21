@@ -262,8 +262,33 @@ export const slotOfTask = (t) => slotOfTime(t.time) || t.slot || 'morning';
 // ---------------------------------------------------------------------------
 // KPI
 // ---------------------------------------------------------------------------
+// Số liệu "Tìm khách mới" lấy từ Fairplay CRM (hàm cl_crm_stats; mỗi người chỉ nhận số của mình)
+export const CRM_METRICS = {
+  new_companies: 'Doanh nghiệp mới vào chuỗi 14 ngày',
+  sequences: 'Người liên hệ vào chuỗi',
+  touches: 'Lần chạm đã gửi',
+  replies: 'Doanh nghiệp có phản hồi',
+  meetings: 'Cuộc hẹn',
+  briefs: 'Cơ hội có brief',
+  added: 'Doanh nghiệp lập hồ sơ, thêm vào danh sách',
+  touch_ontime_pct: 'Lần chạm làm đúng hạn (%)',
+};
+export function crmSum(state, personId, from, to) {
+  const out = {};
+  for (const r of state.crmStats || []) if (r.person_id === personId && r.day >= from && r.day <= to) out[r.metric] = (out[r.metric] || 0) + Number(r.n);
+  out.touch_ontime_pct = out.touch_due ? Math.round(((out.touch_ontime || 0) / out.touch_due) * 100) : null;
+  return out;
+}
+export const hasCrmKpi = (state, personId) => state.kpis.some((k) => k.owner_id === personId && k.active && k.crm_metric);
+
 export function kpiProgress(state, kpi, ref = todayStr()) {
   const [from, to] = periodRange(kpi.period, ref);
+  if (kpi.crm_metric) {
+    const m = crmSum(state, kpi.owner_id, from, to);
+    const value = kpi.crm_metric === 'touch_ontime_pct' ? m.touch_ontime_pct ?? 0 : m[kpi.crm_metric] || 0;
+    const target = Number(kpi.target) || 1;
+    return { value, target, pct: Math.round((value / target) * 100), from, to, crm: true };
+  }
   if (kpi.type === 'bool') {
     const v = (kpi.manual || {})[from];
     return { value: v ? 1 : 0, target: 1, pct: v ? 100 : 0, from, to };
