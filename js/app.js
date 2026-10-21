@@ -1,5 +1,5 @@
 import { html, render, useState, useEffect, useCallback } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
-import { initStore, subscribe, getState, LIVE, auth, loadLive, setErrorHandler, actions } from './store.js';
+import { initStore, subscribe, getState, LIVE, auth, loadLive, setErrorHandler, actions, setReadOnly } from './store.js';
 import { Avatar, Modal } from './ui.js';
 import { DayView } from './today.js';
 import { TeamView } from './team.js';
@@ -49,7 +49,11 @@ function App({ meId, onSignOut }) {
       return 'u_admin';
     }
   });
-  const me = state.people.find((p) => p.id === asId) || state.people[0];
+  const realMe = state.people.find((p) => p.id === asId) || state.people[0];
+  // Admin xem Checklist với vai trò của một thành viên (chỉ xem, chặn ghi ở store.js)
+  const [viewAsId, setViewAsId] = useState(null);
+  const [pickAs, setPickAs] = useState(false);
+  const me = (viewAsId && state.people.find((p) => p.id === viewAsId)) || realMe;
   const [menu, setMenu] = useState(false);
   const [pw, setPw] = useState(false);
   const nav = NAV[me.role];
@@ -120,15 +124,25 @@ function App({ meId, onSignOut }) {
         ${nav.some((n) => n.more) && html`<a href="#" class=${'more-btn ' + (nav.find((n) => n.id === cur)?.more ? 'on' : '')} onClick=${(e) => { e.preventDefault(); setMore(!more); }}><span class="ic">☰</span><span>Thêm</span></a>`}
       </nav>
       <div class="usermenu">
-        <button class="me" onClick=${() => LIVE && setMenu(!menu)} aria-label="Tài khoản"><${Avatar} p=${me} size=${34} /><div class="hide-sm"><b>${me.full_name}</b><small>${U.ROLES[me.role]}</small></div></button>
+        <button class="me" onClick=${() => LIVE && setMenu(!menu)} aria-label="Tài khoản" title=${viewAsId ? 'Đang xem như ' + me.full_name : ''}><${Avatar} p=${me} size=${34} /><div class="hide-sm"><b>${me.full_name}</b><small>${U.ROLES[me.role]}</small></div></button>
         ${menu && html`<div class="menu" onMouseLeave=${() => setMenu(false)}>
-          <div class="menu-head"><b>${me.full_name}</b><small>${me.email || ''}</small></div>
+          <div class="menu-head"><b>${realMe.full_name}</b><small>${realMe.email || ''}</small></div>
+          ${realMe.role === 'admin' && html`<button onClick=${() => { setMenu(false); setPickAs(true); }}>👁 Xem với vai trò thành viên…</button>`}
           <button onClick=${() => { setMenu(false); setPw(true); }}>🔑 Đổi mật khẩu</button>
-          <button onClick=${() => { setMenu(false); onSignOut(); }}>↪ Đăng xuất</button>
+          <button onClick=${() => { setMenu(false); setReadOnly(false); onSignOut(); }}>↪ Đăng xuất</button>
         </div>`}
       </div>
     </header>
     ${pw && html`<${ChangePassword} notify=${notify} onClose=${() => setPw(false)} />`}
+    ${viewAsId && html`<div class="viewas-bar">👁 Đang xem Checklist như <b>${me.full_name}</b> (${U.ROLES[me.role]}${me.dept ? ' ' + U.DEPTS[me.dept] : ''}). Chỉ xem: mọi thay đổi sẽ không được lưu.
+      <button class="btn sm" onClick=${() => setPickAs(true)}>Đổi người</button>
+      <button class="btn sm primary" onClick=${() => { setReadOnly(false); setViewAsId(null); go(NAV[realMe.role][0].id); }}>Thoát chế độ xem</button></div>`}
+    ${pickAs && html`<${Modal} title="Xem Checklist với vai trò của thành viên" onClose=${() => setPickAs(false)}>
+      <p class="muted small">Bạn sẽ thấy Checklist đúng như người đó thấy (menu, việc, báo cáo, KPI). Chế độ này chỉ để xem: không lưu được thay đổi nào.</p>
+      <div class="viewas-list">${state.people.filter((p) => p.active !== false && p.id !== realMe.id).map((p) => html`<button class="viewas-pick" key=${p.id}
+        onClick=${() => { setPickAs(false); setChat(false); setReadOnly(true); setViewAsId(p.id); go(NAV[p.role][0].id); }}>
+        <${Avatar} p=${p} size=${30} /><div><b>${p.full_name}</b><small class="muted"> ${U.ROLES[p.role]}${p.dept ? ' · ' + U.DEPTS[p.dept] : ''}${p.title ? ' · ' + p.title : ''}</small></div></button>`)}</div>
+    </${Modal}>`}
     ${more && html`<div class="moresheet" onClick=${() => setMore(false)}><div onClick=${(e) => e.stopPropagation()}>
       ${nav.filter((n) => n.more).map((n) => html`<button onClick=${() => go(n.id)}>${n.icon} ${n.label}</button>`)}
     </div></div>`}
@@ -148,7 +162,7 @@ function App({ meId, onSignOut }) {
       ${cur === 'habits' && html`<${HabitsView} ctx=${ctx} />`}
       ${cur === 'settings' && html`<${SettingsView} ctx=${ctx} key=${me.id} />`}
     </main>
-    ${me.role === 'admin' && !chat && html`<button class="fab" onClick=${() => setChat(true)} aria-label="Mở trợ lý AI">🤖</button>`}
+    ${me.role === 'admin' && !viewAsId && !chat && html`<button class="fab" onClick=${() => setChat(true)} aria-label="Mở trợ lý AI">🤖</button>`}
     ${chat && html`<${ChatPanel} ctx=${ctx} onClose=${() => setChat(false)} />`}
     ${toast && html`<div class=${'toast ' + toast.type} key=${toast.k}>${toast.msg}</div>`}
   `;

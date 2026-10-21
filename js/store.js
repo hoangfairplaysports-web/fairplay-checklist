@@ -503,3 +503,21 @@ export const actions = {
     persist(() => run(sb.from('ev_events').update(patch).eq('id', id)));
   },
 };
+
+// Admin "xem với vai trò thành viên": chỉ xem, chặn mọi thao tác ghi trước khi đổi dữ liệu
+let READ_ONLY = false;
+export const setReadOnly = (v) => {
+  READ_ONLY = !!v;
+};
+const RO_ALLOW = new Set(['reload', 'myIp']);
+for (const k of Object.keys(actions)) {
+  if (RO_ALLOW.has(k) || typeof actions[k] !== 'function') continue;
+  const f = actions[k];
+  actions[k] = function (...a) {
+    if (READ_ONLY) {
+      onError('Đang xem thử với vai trò khác: thay đổi không được lưu');
+      return Promise.resolve(null);
+    }
+    return f.apply(this, a);
+  };
+}
