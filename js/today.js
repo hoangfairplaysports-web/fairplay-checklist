@@ -5,6 +5,7 @@ import { actions } from './store.js';
 import * as U from './util.js';
 import { EvRow, myEventTasks } from './events.js';
 import { CrmBlock } from './crm-block.js';
+import { IdeasCard } from './ideas.js';
 
 export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, privacy = 'all', onPrivacy }) {
   useNow();
@@ -67,6 +68,8 @@ export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, pr
     </div>`}
 
     ${canAct && !locked && html`<${QuickAdd} ctx=${ctx} person=${person} privacy=${privacy} />`}
+
+    ${isMe && isToday && !locked && person.ideas_on && privacy !== 'private' && html`<${IdeasCard} ctx=${ctx} person=${person} />`}
 
     ${locked && html`<div class="alert info">👆 Bấm <b>Bắt đầu ngày làm việc</b> để mở checklist hôm nay.</div>`}
 

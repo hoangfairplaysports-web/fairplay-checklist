@@ -205,6 +205,7 @@ function People({ ctx }) {
           <b class="small">Đặt lại mật khẩu</b>
           <div class="row"><input id="m-reset" placeholder="Mật khẩu tạm mới" value=${resetPw} onInput=${(e) => setResetPw(e.target.value)} autocomplete="off" />
           <button type="button" class="btn" disabled=${busy} onClick=${doReset}>Đặt lại</button></div></div>`}
+        ${f.id && f.role !== 'bod' && html`<label class="check"><input type="checkbox" checked=${!!f.ideas_on} onChange=${(e) => setF({ ...f, ideas_on: e.target.checked })} /> 💡 Nhận <b>Gợi ý mỗi ngày</b> (AI đề xuất việc mới về kinh doanh, marketing, phát triển bản thân lúc 7:30)</label>`}
         ${err && html`<div class="err">${err}</div>`}
         <div class="row between">
           ${f.id && f.id !== ctx.me.id ? html`<label class="check"><input type="checkbox" checked=${f.active === false} onChange=${(e) => setF({ ...f, active: !e.target.checked })} /> Đã nghỉ việc (khoá)</label>` : html`<span></span>`}
@@ -231,6 +232,8 @@ function Rules({ ctx }) {
     </div>
     <p class="muted small">Thứ 7: làm việc tại nhà, vẫn bấm Bắt đầu và tính giờ như ngày thường, không phải nộp báo cáo ngày.</p>
     <${CheckinRules} f=${f} setF=${setF} ctx=${ctx} />
+    <label>💡 Giới thiệu công ty cho AI gợi ý mỗi ngày <span class="muted small">(sản phẩm, khách hàng mục tiêu, kênh bán, mục tiêu quý — càng cụ thể gợi ý càng sát; để trống = mô tả mặc định)</span>
+      <textarea rows="4" value=${f.ideas_profile || ''} onInput=${set('ideas_profile')} placeholder="VD: Quý này tập trung pickleball cho doanh nghiệp 200–1000 người ở Hà Nội, mục tiêu 6 giải/tháng…"></textarea></label>
     <div class="row end"><button class="btn primary" onClick=${() => { actions.saveSettings(f); ctx.notify('Đã lưu'); }}>Lưu</button></div>
   </div>`;
 }

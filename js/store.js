@@ -2,7 +2,7 @@
 // - Chưa điền js/config.js → chế độ DEMO: dữ liệu mẫu, lưu trên trình duyệt (localStorage).
 // - Đã điền → chế độ THẬT: Supabase (đăng nhập, phân quyền RLS). Mọi thao tác cập nhật giao diện ngay
 //   rồi ghi lên máy chủ; nếu máy chủ từ chối thì báo lỗi và tải lại dữ liệu thật.
-import { makeSeed, instantiateRoutines, demoEvents } from './seed.js';
+import { makeSeed, instantiateRoutines, demoEvents, demoIdeas } from './seed.js';
 import { CONFIG } from './config.js';
 import { uid, todayStr, addDays, yearStart, getPosition } from './util.js';
 
@@ -42,6 +42,11 @@ function loadDemo() {
   } catch {}
   st = st || makeSeed();
   if (!st.events) Object.assign(st, demoEvents(st));
+  if (!st.ideas) {
+    // Bản demo cũ chưa có Gợi ý mỗi ngày → bật cho Quản lý và 1 nhân viên kinh doanh
+    st.ideas = [];
+    st.people = st.people.map((p) => (['u_admin', 'u_bao'].includes(p.id) ? { ...p, ideas_on: true } : p));
+  }
   return st;
 }
 function ensureTodayDemo() {
@@ -50,6 +55,12 @@ function ensureTodayDemo() {
       if (p.role === 'bod' || p.active === false) continue;
       state.tasks.push(...instantiateRoutines(state, p, d));
     }
+  }
+  // Gợi ý mỗi ngày (bản demo: lấy từ bộ mẫu, bản thật do AI tạo lúc 7:30)
+  state.ideas = state.ideas || [];
+  for (const p of state.people) {
+    if (!p.ideas_on || p.active === false) continue;
+    if (!state.ideas.some((i) => i.owner_id === p.id && i.date === todayStr())) state.ideas.push(...demoIdeas(state, p, todayStr()));
   }
 }
 export function resetDemo() {
@@ -83,7 +94,7 @@ async function all(q) {
 }
 const fromDb = {
   member: (m) => ({ id: m.id, email: m.email, full_name: m.full_name, role: m.role, dept: m.dept, title: m.title, active: m.active,
-    notify: { push: m.notify_push, telegram: m.notify_telegram }, telegram_linked: !!m.telegram_chat_id }),
+    notify: { push: m.notify_push, telegram: m.notify_telegram }, telegram_linked: !!m.telegram_chat_id, ideas_on: !!m.ideas_on }),
   withGroup: (r) => {
     const { grp, ...rest } = r;
     return { ...rest, group: grp ?? null };
@@ -190,6 +201,7 @@ export async function loadLive() {
     events,
     ev_tasks: evTasks,
     // Số liệu tìm khách mới từ CRM (KPI tự đếm, báo cáo ngày, tab Tuần này)
+    ideas: await sb.from('cl_ideas').select('*').gte('date', addDays(-30)).order('created_at').then((r) => r.data || [], () => []),
     crmStats: await sb.rpc('cl_crm_stats', { p_from: since, p_to: addDays(1) }).then((r) => r.data || [], () => []),
     loadedAt: Date.now(),
   };
@@ -383,6 +395,29 @@ export const actions = {
     commit();
     persist(() => run(sb.from('cl_leaves').delete().eq('id', id)));
   },
+  // --- Gợi ý mỗi ngày ---
+  ideaSet(id, patch) {
+    state.ideas = state.ideas.map((x) => (x.id === id ? { ...x, ...patch } : x));
+    commit();
+    persist(() => run(sb.from('cl_ideas').update(patch).eq('id', id)));
+  },
+  // Thêm gợi ý thành 1 việc hôm nay (các bước gợi ý nằm ở phần ghi chú)
+  ideaToTask(idea) {
+    const note = [idea.why, idea.steps].filter(Boolean).join('\n\n');
+    const task = this.addTask({ owner_id: idea.owner_id, title: idea.title, note, group: '💡 Gợi ý', priority: 'mid' });
+    this.ideaSet(idea.id, { status: 'added', task_id: task.id });
+    return task;
+  },
+  async moreIdeas(pid) {
+    if (!LIVE) {
+      state.ideas = [...state.ideas, ...demoIdeas(state, find('people', pid), todayStr())];
+      commit();
+      return;
+    }
+    const res = await callFunction('cl-ideas', { action: 'more' });
+    state.ideas = [...state.ideas, ...(res.ideas || [])];
+    commit();
+  },
   saveSettings(patch) {
     state.settings = { ...state.settings, ...patch };
     commit();
@@ -396,7 +431,7 @@ export const actions = {
       commit();
       persist(() => run(sb.from('cl_members').update({
         full_name: next.full_name, role: next.role, dept: next.role === 'staff' ? next.dept : null, title: next.title || null, active: next.active !== false,
-        notify_push: !!next.notify?.push, notify_telegram: !!next.notify?.telegram,
+        notify_push: !!next.notify?.push, notify_telegram: !!next.notify?.telegram, ideas_on: !!next.ideas_on,
       }).eq('id', p.id)));
     } else {
       state.people = [...state.people, { active: true, notify: { push: true, telegram: false }, ...p, id: uid() }];

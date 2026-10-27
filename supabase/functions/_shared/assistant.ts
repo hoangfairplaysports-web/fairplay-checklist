@@ -4,16 +4,16 @@
 import { addDays, admin, dowOf, fmtTime, Member, toMin, vnNow } from './common.ts';
 
 const KEY = Deno.env.get('GEMINI_API_KEY');
-const MODELS: Record<string, string> = {
+export const MODELS: Record<string, string> = {
   'gemini-flash': Deno.env.get('GEMINI_MODEL_FLASH') ?? 'gemini-flash-latest',
   'gemini-pro': Deno.env.get('GEMINI_MODEL_PRO') ?? 'gemini-pro-latest',
 };
 // Model dự phòng khi Google quá tải (503) hoặc vượt hạn mức (429)
-const FALLBACKS = (Deno.env.get('GEMINI_FALLBACKS') ?? 'gemini-flash-lite-latest,gemini-2.5-flash').split(',').map((x) => x.trim()).filter(Boolean);
+export const FALLBACKS = (Deno.env.get('GEMINI_FALLBACKS') ?? 'gemini-flash-lite-latest,gemini-2.5-flash').split(',').map((x) => x.trim()).filter(Boolean);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Gọi Gemini: thử lại khi quá tải, rồi chuyển model dự phòng. Trả về {data, model} hoặc {error}
-async function callGemini(models: string[], body: unknown): Promise<{ data?: any; model?: string; error?: string }> {
+export async function callGemini(models: string[], body: unknown): Promise<{ data?: any; model?: string; error?: string }> {
   let last = '';
   for (const model of models) {
     for (let attempt = 0; attempt < 3; attempt++) {

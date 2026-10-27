@@ -3,10 +3,10 @@ import { generateChecklist, defaultPayments } from './ev-core.js';
 import { uid, todayStr, addDays, eachDay, weekday, recursOn, routineAppliesTo, isWorkday, DEFAULT_SETTINGS, weekStart } from './util.js';
 
 export const PEOPLE = [
-  { id: 'u_admin', full_name: 'Quản lý', role: 'admin', dept: null, title: 'Trưởng phòng MKT & KD', notify: { push: true, telegram: true } },
+  { id: 'u_admin', full_name: 'Quản lý', role: 'admin', dept: null, title: 'Trưởng phòng MKT & KD', notify: { push: true, telegram: true }, ideas_on: true },
   { id: 'u_mai', full_name: 'Nguyễn Mai Anh', role: 'staff', dept: 'mkt', title: 'Content / Social', notify: { push: true, telegram: false } },
   { id: 'u_kiet', full_name: 'Lê Tuấn Kiệt', role: 'staff', dept: 'mkt', title: 'Video / TikTok', notify: { push: false, telegram: true } },
-  { id: 'u_bao', full_name: 'Trần Quốc Bảo', role: 'staff', dept: 'sales', title: 'Sales B2B', notify: { push: true, telegram: true } },
+  { id: 'u_bao', full_name: 'Trần Quốc Bảo', role: 'staff', dept: 'sales', title: 'Sales B2B', notify: { push: true, telegram: true }, ideas_on: true },
   { id: 'u_ha', full_name: 'Phạm Thu Hà', role: 'staff', dept: 'sales', title: 'Sales B2B', notify: { push: true, telegram: false } },
   { id: 'u_bod', full_name: 'Thành viên BOD', role: 'bod', dept: null, title: 'Ban giám đốc', notify: { push: true, telegram: false } },
 ];
@@ -224,4 +224,51 @@ export function demoEvents(state) {
   tasks.filter((t) => /Hợp đồng/.test(t.category) && /Ký hợp đồng/.test(t.title)).forEach((t) => (t.status = 'done'));
   void staff;
   return { events: [ev], ev_tasks: tasks };
+}
+
+// ---------------------------------------------------------------------------
+// Gợi ý mỗi ngày — bộ mẫu cho bản demo (bản thật do AI tạo từ checklist, KPI và CRM)
+// ---------------------------------------------------------------------------
+const IDEA_POOL = [
+  { area: 'sales', effort: '1 giờ', title: 'Gọi lại 5 khách đã báo giá nhưng im lặng quá 10 ngày',
+    why: '7 lead đang ở "Đã báo giá" mà không có tương tác mới ≥10 ngày — nhóm dễ mất nhất vì khách đang so giá.',
+    steps: '- Lọc CRM: giai đoạn Đã báo giá, tương tác cuối > 10 ngày\n- Gọi hỏi "anh/chị đang vướng điểm nào" thay vì hỏi "đã duyệt chưa"\n- Đề xuất 1 phương án gọn hơn (bớt hạng mục) cho khách chê giá\n- Ghi lý do vào CRM, hẹn follow-up' },
+  { area: 'sales', effort: '30 phút', title: 'Nhắn 3 khách cũ đến mùa giải: "Năm nay mình làm tiếp chứ?"',
+    why: '3 doanh nghiệp tổ chức giải cùng kỳ năm ngoái (tháng 12–1). Liên hệ trước 2–3 tháng giúp vào kịp kế hoạch ngân sách.',
+    steps: '- Mở CRM → Chăm sóc → Mùa giải\n- Gửi kèm 3 ảnh đẹp nhất giải năm ngoái\n- Gợi ý 1 điểm mới so với năm trước (thêm pickleball, giải gia đình)' },
+  { area: 'sales', effort: '1 giờ', title: 'Tìm 10 doanh nghiệp vừa tuyển HR / Công đoàn trên LinkedIn',
+    why: 'Người mới nhận vị trí HR thường muốn làm 1 sự kiện gắn kết trong 3 tháng đầu — tín hiệu mua rất tốt.',
+    steps: '- LinkedIn tìm "Started new position" + HR Manager / C&B / Engagement, khu vực Hà Nội\n- Chúc mừng + kết nối, chưa chào bán\n- Thêm vào CRM mục Tìm khách mới, tín hiệu "HR mới"' },
+  { area: 'mkt', effort: '30 phút', title: 'Viết bài LinkedIn: 3 lỗi khiến giải nội bộ doanh nghiệp "nhạt"',
+    why: 'Dạng bài chia sẻ kinh nghiệm thu hút đúng tệp HR/Công đoàn hơn bài khoe giải đã làm.',
+    steps: '- Mở bài bằng 1 tình huống thật (giải đông người đăng ký nhưng ít người đến xem)\n- 3 lỗi + cách Fairplay xử lý\n- Kết bằng câu hỏi mời bình luận, không chèn link bán hàng' },
+  { area: 'mkt', effort: '1 giờ', title: 'Cắt 3 video 15 giây "khoảnh khắc ghi bàn" từ giải gần nhất',
+    why: 'Video ngắn cảm xúc là định dạng TikTok/Reels có lượt xem cao nhất, và khách cũ hay chia sẻ lại.',
+    steps: '- Chọn 3 pha có tiếng hò reo\n- Thêm chữ: tên công ty + "Giải bóng đá nội bộ 2026"\n- Gắn thẻ fanpage khách hàng khi đăng' },
+  { area: 'mkt', effort: '30 phút', title: 'Lên ý tưởng chiến dịch "Year End Party thể thao" trước 20/11',
+    why: 'Doanh nghiệp đang chốt kế hoạch tất niên trong tháng 11 — cơ hội bán gói hội thao cuối năm.',
+    steps: '- Viết 1 trang giới thiệu gói "Tất niên năng động"\n- 1 bài Facebook + 1 email gửi khách cũ\n- Ưu đãi chốt sớm trước 30/11' },
+  { area: 'growth', effort: '30 phút', title: 'Dùng AI viết sẵn 5 câu trả lời khi khách chê giá cao',
+    why: 'Lý do thất bại phổ biến nhất 4 tháng qua là "giá cao" — chuẩn bị sẵn câu trả lời giúp cả team chốt tốt hơn.',
+    steps: '- Liệt kê 5 kiểu chê giá hay gặp\n- Nhờ AI viết câu trả lời theo hướng giá trị, không giảm giá ngay\n- Gửi vào nhóm Kinh doanh để dùng chung' },
+  { area: 'growth', effort: '15 phút', title: 'Đọc 1 case study về sự kiện gắn kết nhân viên và ghi 3 ý áp dụng',
+    why: 'Có thêm câu chuyện và số liệu để dẫn chứng khi tư vấn khách doanh nghiệp.',
+    steps: '- Tìm "employee engagement sports event case study"\n- Ghi 3 ý dùng được cho proposal\n- Chia sẻ trong họp phòng tuần này' },
+  { area: 'ops', effort: '30 phút', title: 'Gửi khảo sát 3 câu cho khách vừa tổ chức giải xong',
+    why: 'Phản hồi sau giải vừa giúp cải thiện, vừa thành lời chứng thực để làm marketing.',
+    steps: '- 3 câu: hài lòng mấy điểm / điều thích nhất / điều cần cải thiện\n- Xin phép dùng câu trả lời làm testimonial' },
+];
+export function demoIdeas(state, person, date) {
+  const used = new Set((state.ideas || []).filter((i) => i.owner_id === person.id).map((i) => i.title));
+  let pool = IDEA_POOL.filter((i) => !used.has(i.title));
+  if (person.dept === 'mkt') pool = pool.filter((i) => i.area !== 'sales');
+  if (person.dept === 'sales') pool = pool.filter((i) => i.area !== 'mkt');
+  if (!pool.length) pool = IDEA_POOL;
+  const pick = [];
+  for (const area of ['sales', 'mkt', 'growth', 'ops']) {
+    const x = pool.find((i) => i.area === area && !pick.includes(i));
+    if (x && pick.length < 3) pick.push(x);
+  }
+  for (const x of pool) if (pick.length < 3 && !pick.includes(x)) pick.push(x);
+  return pick.map((i) => ({ ...i, id: uid(), owner_id: person.id, date, status: 'new', feedback: null, task_id: null, created_at: new Date().toISOString() }));
 }
