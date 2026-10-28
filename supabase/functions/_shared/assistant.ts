@@ -13,7 +13,7 @@ export const FALLBACKS = (Deno.env.get('GEMINI_FALLBACKS') ?? 'gemini-flash-lite
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Gọi Gemini: thử lại khi quá tải, rồi chuyển model dự phòng. Trả về {data, model} hoặc {error}
-export async function callGemini(models: string[], body: unknown): Promise<{ data?: any; model?: string; error?: string }> {
+export async function callGemini(models: string[], body: unknown, timeoutMs = 120_000): Promise<{ data?: any; model?: string; error?: string }> {
   let last = '';
   for (const model of models) {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -21,7 +21,8 @@ export async function callGemini(models: string[], body: unknown): Promise<{ dat
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY! },
         body: JSON.stringify(body),
-      });
+        signal: AbortSignal.timeout(timeoutMs), // treo quá lâu → thử lại / chuyển model dự phòng
+      }).catch((e) => new Response(String(e), { status: 504 }));
       if (res.ok) return { data: await res.json(), model };
       last = `${res.status}`;
       const text = await res.text();

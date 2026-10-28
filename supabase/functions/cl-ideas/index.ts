@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
     const t0 = Date.now();
     const { data: m } = await admin.from('cl_members').select('*').eq('active', true).eq('ideas_on', true).limit(1).maybeSingle();
     if (!m) return json({ error: 'no member' });
-    const c = await buildContext(m as Member, vnNow().date);
-    return json({ ms: Date.now() - t0, chars: c.text.length, sample: c.text.slice(0, 300) });
+    const r = await generate(m as Member, vnNow().date, false, body.model);
+    return json({ ms: Date.now() - t0, model: r.model, error: r.error, ideas: r.ideas });
   }
   const now = vnNow();
   if (now.dow === 0) return json({ ok: true, skipped: 'sunday' });
@@ -55,10 +55,12 @@ Deno.serve(async (req) => {
 
 type Idea = { area: string; title: string; why: string; steps: string; effort: string };
 
-async function generate(m: Member, today: string): Promise<{ ideas?: Idea[]; error?: string }> {
+async function generate(m: Member, today: string, save = true, force?: string): Promise<{ ideas?: Idea[]; error?: string; model?: string }> {
   const ctx = await buildContext(m, today);
   const { data: setting } = await admin.from('cl_settings').select('data').eq('id', 1).maybeSingle();
-  const model = MODELS[setting?.data?.ai_model ?? 'gemini-flash'] ?? MODELS['gemini-flash'];
+  // Gợi ý dùng model "lite" (~4 giây); model chat của trợ lý (~75 giây) chỉ làm dự phòng
+  const model = force || (Deno.env.get('GEMINI_MODEL_IDEAS') ?? 'gemini-flash-lite-latest');
+  const backup = MODELS[setting?.data?.ai_model ?? 'gemini-flash'] ?? MODELS['gemini-flash'];
   const profile = (setting?.data?.ideas_profile as string)?.trim() || DEFAULT_PROFILE;
 
   const system = `Bạn là cố vấn phát triển kinh doanh & marketing cho một thành viên của công ty dưới đây. Mỗi ngày bạn đề xuất ${PER_RUN} việc MỚI, cụ thể, làm được trong hôm nay, giúp họ tăng doanh số, làm marketing tốt hơn hoặc phát triển kỹ năng — những việc họ chưa nghĩ tới, không phải việc lặp lại họ vẫn làm.
@@ -75,11 +77,13 @@ Quy tắc:
 - Thực tế với công ty nhỏ ở Việt Nam: không đề xuất việc tốn nhiều tiền hoặc cần cả team.`;
 
   const user = `Hôm nay: ${ctx.dateLine}\n\n${ctx.text}\n\nHãy đề xuất ${PER_RUN} gợi ý cho hôm nay.`;
-  const out = await callGemini([model, ...FALLBACKS.filter((x) => x !== model)], {
+  const out = await callGemini(force ? [model] : [...new Set([model, backup, ...FALLBACKS])], {
     systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: 'user', parts: [{ text: user }] }],
     generationConfig: {
       temperature: 0.9,
+      // Không cần suy luận dài: tắt bớt "thinking" để trả lời nhanh (trước đó mất ~90 giây)
+      thinkingConfig: { thinkingBudget: 512 },
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'ARRAY',
@@ -96,7 +100,7 @@ Quy tắc:
         },
       },
     },
-  });
+  }, 30_000);
   if (out.error) return { error: out.error === 'auth' ? 'Khoá Gemini không hợp lệ' : 'AI đang bận, thử lại sau ít phút' };
   let ideas: Idea[] = [];
   try {
@@ -112,6 +116,7 @@ Quy tắc:
     effort: String(i.effort ?? '').slice(0, 20),
   }));
   if (!ideas.length) return { error: 'AI chưa đưa ra được gợi ý, thử lại' };
+  if (!save) return { ideas, model: out.model };
   const { data: saved, error } = await admin.from('cl_ideas').insert(ideas.map((i) => ({ ...i, owner_id: m.id, date: today }))).select();
   if (error) return { error: error.message };
   return { ideas: saved as Idea[] };
