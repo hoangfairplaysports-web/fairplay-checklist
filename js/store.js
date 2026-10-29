@@ -532,6 +532,14 @@ export const actions = {
     if (replace) await run(sb.from('ev_tasks').delete().eq('event_id', eventId));
     for (let i = 0; i < rows.length; i += 200) await run(sb.from('ev_tasks').insert(rows.slice(i, i + 200).map((x) => pick(x, EV_TASK_COLS))));
   },
+  // Tạo giải trực tiếp từ file checklist (giải không nhập báo giá ở CRM, hoặc tách nhiều báo giá)
+  async createEvent(ev) {
+    const row = { id: uid(), status: 'preparing', ...ev };
+    state.events = [...(state.events || []), row];
+    commit();
+    if (LIVE) await run(sb.from('ev_events').insert(row));
+    return row;
+  },
   saveEvent(id, patch) {
     state.events = state.events.map((e) => (e.id === id ? { ...e, ...patch } : e));
     commit();

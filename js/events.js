@@ -30,6 +30,7 @@ export function EventsView({ ctx }) {
   const { state, me } = ctx;
   const [openId, setOpenId] = useState(() => (location.hash.match(/^#event-(.+)$/) || [])[1] || null);
   const [tab, setTab] = useState('active');
+  const [creating, setCreating] = useState(false);
   const events = (state.events || []).filter((e) => (tab === 'active' ? !['done', 'cancelled'].includes(e.status) : ['done', 'cancelled'].includes(e.status)))
     .sort((a, b) => (a.event_date || '9').localeCompare(b.event_date || '9'));
   const open = (state.events || []).find((e) => e.id === openId);
@@ -37,8 +38,12 @@ export function EventsView({ ctx }) {
   return html`<div class="page">
     <div class="page-head">
       <div><h1>🏆 Giải đấu</h1><div class="muted">Checklist triển khai từng giải — tạo từ báo giá trong Fairplay CRM → Triển khai giải</div></div>
-      <${Seg} value=${tab} onChange=${setTab} options=${[{ id: 'active', label: 'Đang triển khai' }, { id: 'done', label: 'Đã xong' }]} />
+      <div class="row">
+        <${Seg} value=${tab} onChange=${setTab} options=${[{ id: 'active', label: 'Đang triển khai' }, { id: 'done', label: 'Đã xong' }]} />
+        ${me.role === 'admin' && html`<button class="btn primary" onClick=${() => setCreating(true)}>⬆ Nhập checklist từ file</button>`}
+      </div>
     </div>
+    ${creating && html`<${ImportChecklist} ctx=${ctx} onClose=${() => setCreating(false)} onDone=${(id) => { setCreating(false); id && setOpenId(id); }} />`}
     ${!events.length && html`<${Empty}>${tab === 'active' ? 'Chưa có giải nào đang triển khai. Khi chốt giải, quản lý nhập báo giá ở Fairplay CRM → Triển khai giải.' : 'Chưa có giải nào đã xong.'}</${Empty}>`}
     <div class="pgrid wide">${events.map((e) => {
       const s = eventStats(state, e, me.id);
@@ -58,6 +63,140 @@ export function EventsView({ ctx }) {
       </div>`;
     })}</div>
   </div>`;
+}
+
+// Đọc tên giải, khách, ngày từ sheet "Tổng quan" / dòng tiêu đề của file checklist
+function readEventInfo(sheets, fileName) {
+  const info = { name: '', client_name: '', event_date: '', venue: '' };
+  const date = (t) => {
+    const m = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+  };
+  for (const { rows } of sheets) {
+    for (const r of rows.slice(0, 40)) {
+      const cells = (r || []).map((c) => (c == null ? '' : String(c).trim())).filter(Boolean);
+      if (!cells.length) continue;
+      const k = fold(cells[0]);
+      if (!info.name && /checklist/.test(k) && cells.length === 1) info.name = cells[0].replace(/\s*[-–]\s*checklist.*$/i, '').replace(/^checklist[^-–]*[-–]\s*/i, '').trim();
+      if (cells.length < 2) {
+        if (!info.event_date && /ngay d|ngay to chuc/.test(k)) info.event_date = date(cells[0]);
+        continue;
+      }
+      if (!info.client_name && /^khach hang|^don vi to chuc|^chu dau tu/.test(k)) info.client_name = cells[1];
+      if (!info.event_date && /^ngay to chuc|^ngay d\b|^thoi gian/.test(k)) info.event_date = date(cells[1]);
+      if (!info.venue && /^dia diem|^san|^khu/.test(k)) info.venue = cells[1].split(/[,;]/)[0];
+    }
+  }
+  if (!info.name) info.name = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\bchecklist\b/gi, '').trim();
+  // Tên viết HOA toàn bộ → viết hoa chữ đầu mỗi từ
+  const nm = info.name.normalize('NFC').trim();
+  if (nm === nm.toUpperCase()) info.name = nm.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
+  return info;
+}
+// Ghi chú kiểu "Đã gửi", "Đã có" coi như việc đã xong
+const NOTE_DONE = /^(da gui|da co|da xong|da hoan thanh|da ky|da chot|hoan thanh)/;
+
+// Nhập checklist từ file Excel: tạo giải mới, hoặc nhập vào giải có sẵn (thay toàn bộ / thêm vào)
+function ImportChecklist({ ctx, ev, onClose, onDone }) {
+  const { state } = ctx;
+  const staff = state.people.filter((p) => p.role !== 'bod' && p.active !== false);
+  const [sheets, setSheets] = useState(null);
+  const [pick, setPick] = useState(0);
+  const [target, setTarget] = useState(ev ? ev.id : 'new');
+  const [info, setInfo] = useState({ name: '', client_name: '', event_date: '', venue: '' });
+  const [replace, setReplace] = useState(!!ev);
+  const [roles, setRoles] = useState({});
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function onFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErr('');
+    try {
+      const XLSX = await loadXlsx();
+      const wb = XLSX.read(await file.arrayBuffer(), { cellDates: false });
+      const data = wb.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: false, defval: null }) }));
+      const res = parseChecklistFile(data, state.people);
+      if (!res.length) return setErr('Không tìm thấy sheet checklist (cần các cột Hạng mục · Task · PIC · Deadline).');
+      setSheets(res);
+      setPick(0);
+      const inf = readEventInfo(data, file.name);
+      setInfo({ ...inf, source_file: file.name });
+      // Đã có giải trùng tên → gợi ý nhập vào giải đó
+      if (!ev) {
+        const same = (state.events || []).find((x) => inf.name && fold(x.name) === fold(inf.name));
+        if (same) { setTarget(same.id); setReplace(true); }
+      }
+    } catch (x) {
+      setErr('Không đọc được file: ' + x.message);
+    }
+  }
+  const preview = sheets?.[pick]?.tasks || [];
+  const roleNames = [...new Set(preview.filter((t) => !t.pic_id && t.pic_name).map((t) => t.pic_name))];
+  const evTarget = target === 'new' ? null : (state.events || []).find((x) => x.id === target);
+  const doneN = preview.filter((t) => t.status === 'done' || NOTE_DONE.test(fold(t.note))).length;
+  async function doImport() {
+    setErr('');
+    if (target === 'new' && !info.name.trim()) return setErr('Nhập tên giải.');
+    setBusy(true);
+    try {
+      let e2 = evTarget;
+      if (!e2) e2 = await actions.createEvent({ name: info.name.trim(), client_name: info.client_name || null, event_date: info.event_date || null, venue: info.venue || null,
+        source_file: info.source_file ? `${info.source_file} (checklist)` : null, notes: 'Tạo từ file checklist' });
+      const evDate = e2.event_date;
+      const tasks = preview.map((t) => {
+        const who = !t.pic_id && t.pic_name && roles[t.pic_name];
+        return {
+          ...t,
+          ...(who ? { pic_id: who, pic_ids: [who], pic_name: null } : t.pic_id ? { pic_ids: [t.pic_id] } : {}),
+          status: t.status === 'todo' && NOTE_DONE.test(fold(t.note)) ? 'done' : t.status,
+          offset_days: t.offset_days ?? (t.due_date && evDate ? U.diffDays(evDate, t.due_date) : null),
+        };
+      });
+      await actions.importEvTasks(e2.id, tasks, !!evTarget && replace);
+      ctx.notify(`Đã nhập ${tasks.length} việc vào "${e2.name}"`);
+      onDone ? onDone(e2.id) : onClose();
+    } catch (x) {
+      setErr(x.message);
+    }
+    setBusy(false);
+  }
+  const setI = (k) => (e) => setInfo({ ...info, [k]: e.target.value });
+  return html`<${Modal} title="Nhập checklist từ file Excel" onClose=${onClose} wide>
+    <div class="form">
+      <p class="muted">Chọn file checklist theo mẫu Fairplay (cột STT · Hạng mục · Task · Chi tiết · PIC · SUP · Deadline · Tình trạng · Ghi chú; các dòng ▶ TRƯỚC / TRONG / SAU SỰ KIỆN để chia giai đoạn).
+        Dùng cho giải không nhập báo giá ở CRM, giải tách nhiều báo giá, hoặc khi muốn thay checklist tự sinh bằng checklist đã soạn.</p>
+      <input id="ck-file" type="file" accept=".xlsx,.xls" onChange=${onFile} />
+      ${err && html`<div class="err">${err}</div>`}
+      ${sheets && html`
+        ${sheets.length > 1 && html`<label>Sheet<select value=${pick} onChange=${(e) => setPick(+e.target.value)}>${sheets.map((s, i) => html`<option value=${i}>${s.sheet} (${s.tasks.length} việc)</option>`)}</select></label>`}
+        <label>Nhập vào<select value=${target} onChange=${(e) => { setTarget(e.target.value); setReplace(e.target.value !== 'new'); }}>
+          <option value="new">＋ Tạo giải mới từ file này</option>
+          ${(state.events || []).filter((x) => x.status !== 'cancelled').map((x) => html`<option value=${x.id}>${x.name}${x.event_date ? ' · ' + U.fmtShort(x.event_date) : ''} (${state.ev_tasks.filter((t) => t.event_id === x.id).length} việc)</option>`)}
+        </select></label>
+        ${target === 'new' ? html`<div class="grid2">
+            <label>Tên giải *<input value=${info.name} onInput=${setI('name')} /></label>
+            <label>Ngày tổ chức (ngày D)<input type="date" value=${info.event_date} onInput=${setI('event_date')} /></label>
+            <label>Khách hàng<input value=${info.client_name} onInput=${setI('client_name')} /></label>
+            <label>Địa điểm<input value=${info.venue} onInput=${setI('venue')} /></label>
+          </div>
+          <p class="muted small">Giải mới chỉ có checklist, chưa có số tiền. Khi có báo giá, có thể nhập báo giá ở CRM → Triển khai giải (tạo giải riêng) hoặc giữ nguyên giải này để theo dõi việc.</p>`
+        : html`<label class="check"><input type="checkbox" checked=${replace} onChange=${(e) => setReplace(e.target.checked)} /> Thay toàn bộ checklist hiện tại của giải (${state.ev_tasks.filter((t) => t.event_id === target).length} việc). Bỏ tick = thêm vào cuối</label>`}
+        <p><b>${preview.length} việc</b> · ${doneN} việc đã xong theo file · ${preview.filter((t) => t.pic_id).length} việc đã khớp tên nhân viên</p>
+        ${roleNames.length > 0 && html`<fieldset class="fs"><legend>Giao người cho từng vai trò PIC trong file</legend>
+          <p class="muted small">Chọn người phụ trách cho mỗi vai trò; để trống thì giữ nguyên chữ vai trò, giao sau bằng "Giao cả nhóm" hoặc nút PIC trên từng việc.</p>
+          <div class="grid2">${roleNames.map((r) => html`<label key=${r}>${r} <span class="muted small">(${preview.filter((t) => t.pic_name === r).length} việc)</span>
+            <select value=${roles[r] || ''} onChange=${(e) => setRoles({ ...roles, [r]: e.target.value })}><option value="">- Giữ là "${r}" -</option>${staff.map((p) => html`<option value=${p.id}>${p.full_name}</option>`)}</select></label>`)}</div>
+        </fieldset>`}
+        <div class="table-wrap" style="max-height:260px;overflow:auto"><table class="table compact">
+          <thead><tr><th>Giai đoạn</th><th>Hạng mục</th><th>Việc</th><th>PIC</th><th>Hạn</th></tr></thead>
+          <tbody>${preview.slice(0, 120).map((t) => html`<tr><td class="small">${PHASES[t.phase]}</td><td class="small">${t.category}</td><td>${t.title}${(t.status === 'done' || NOTE_DONE.test(fold(t.note))) ? ' ✅' : ''}</td>
+            <td class="small">${t.pic_id ? state.people.find((p) => p.id === t.pic_id)?.full_name : roles[t.pic_name] ? state.people.find((p) => p.id === roles[t.pic_name])?.full_name : t.pic_name || '-'}</td>
+            <td class="small">${t.due_date ? U.fmtShort(t.due_date) : '-'}</td></tr>`)}</tbody>
+        </table></div>
+        <div class="row end"><button class="btn" onClick=${onClose}>Huỷ</button><button class="btn primary" disabled=${busy} onClick=${doImport}>${busy ? 'Đang nhập…' : (target === 'new' ? 'Tạo giải và nhập ' : 'Nhập ') + preview.length + ' việc'}</button></div>`}
+    </div>
+  </${Modal}>`;
 }
 
 function EventDetail({ ctx, ev, onBack }) {
@@ -251,6 +390,7 @@ function PicPicker({ staff, value, onChange, onClose }) {
   </div>`;
 }
 
+let xlsxP;
 export function loadXlsx() {
   xlsxP = xlsxP || import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm').then((m) => m.default || m);
   return xlsxP;
