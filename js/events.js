@@ -1,7 +1,7 @@
 // Giải đấu (phía Checklist): danh sách giải đang triển khai + checklist Trước / Trong / Sau của từng giải.
 // Phần tiền, nhà cung cấp, nghiệm thu nằm ở Fairplay CRM → "Triển khai giải".
 import { html, Modal, Avatar, Bar, Seg, Empty, ConfirmButton } from './ui.js';
-import { useState, useMemo, useEffect } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
+import { useState, useMemo, useEffect, useRef } from 'https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js';
 import { actions, LIVE } from './store.js';
 import { PHASES, dLabel, parseChecklistFile, fold } from './ev-core.js';
 import * as U from './util.js';
@@ -325,12 +325,23 @@ export function EvRow({ t, ctx, staff, showEvent }) {
     </div>
     <div class="c-note">
       ${canEdit
-        ? html`<input class="in-note" value=${note} placeholder="Ghi chú / kết quả…" onInput=${(e) => setNote(e.target.value)} onBlur=${() => note !== (t.note || '') && actions.updateEvTask(t.id, { note })} onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()} />`
+        ? html`<${GrowNote} value=${note} onInput=${setNote} onSave=${() => note !== (t.note || '') && actions.updateEvTask(t.id, { note })} />`
         : html`<div class=${'note-ro' + (note ? '' : ' empty-ro')}>${note || '—'}</div>`}
     </div>
     <button type="button" class="c-more" disabled=${!isAdmin} onClick=${() => setEdit(true)} title="Sửa việc">⋯</button>
     ${edit && html`<${EvTaskForm} ctx=${ctx} task=${t} staff=${staff || state.people} onClose=${() => setEdit(false)} />`}
   </div>`;
+}
+
+// Ô ghi chú tự giãn theo nội dung: luôn thấy hết chữ. Enter = lưu, Shift+Enter = xuống dòng.
+function GrowNote({ value, onInput, onSave }) {
+  const ref = useRef(null);
+  const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
+  useEffect(fit, [value]);
+  useEffect(() => { addEventListener('resize', fit); return () => removeEventListener('resize', fit); }, []);
+  return html`<textarea ref=${ref} rows="1" class="in-note grow" value=${value} placeholder="Ghi chú / kết quả…"
+    onInput=${(e) => { onInput(e.target.value); fit(); }} onBlur=${onSave}
+    onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.blur(); } }}></textarea>`;
 }
 
 function EvTaskForm({ ctx, ev, task, init = {}, staff, onClose }) {
