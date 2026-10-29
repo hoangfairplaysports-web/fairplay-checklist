@@ -31,6 +31,7 @@ export function EventsView({ ctx }) {
   const [openId, setOpenId] = useState(() => (location.hash.match(/^#event-(.+)$/) || [])[1] || null);
   const [tab, setTab] = useState('active');
   const [creating, setCreating] = useState(false);
+  const [editEv, setEditEv] = useState(null);
   const events = (state.events || []).filter((e) => (tab === 'active' ? !['done', 'cancelled'].includes(e.status) : ['done', 'cancelled'].includes(e.status)))
     .sort((a, b) => (a.event_date || '9').localeCompare(b.event_date || '9'));
   const open = (state.events || []).find((e) => e.id === openId);
@@ -43,6 +44,7 @@ export function EventsView({ ctx }) {
         ${me.role === 'admin' && html`<button class="btn primary" onClick=${() => setCreating(true)}>⬆ Nhập checklist từ file</button>`}
       </div>
     </div>
+    ${editEv && html`<${EditEvent} ctx=${ctx} ev=${editEv} onClose=${() => setEditEv(null)} />`}
     ${creating && html`<${ImportChecklist} ctx=${ctx} onClose=${() => setCreating(false)} onDone=${(id) => { setCreating(false); id && setOpenId(id); }} />`}
     ${!events.length && html`<${Empty}>${tab === 'active' ? 'Chưa có giải nào đang triển khai. Khi chốt giải, quản lý nhập báo giá ở Fairplay CRM → Triển khai giải.' : 'Chưa có giải nào đã xong.'}</${Empty}>`}
     <div class="pgrid wide">${events.map((e) => {
@@ -59,6 +61,7 @@ export function EventsView({ ctx }) {
           ${s.blocked > 0 && html`<span class="badge bad">🚧 ${s.blocked} vướng</span>`}
           ${s.mine > 0 && html`<span class="badge info">${s.mine} việc của tôi</span>`}
           ${pm && html`<span class="muted push">PM: ${pm.full_name}</span>`}
+          ${me.role === 'admin' && html`<button class=${'btn sm' + (pm ? '' : ' push')} title="Sửa tên, ngày, địa điểm" onClick=${(x) => { x.stopPropagation(); setEditEv(e); }}>✏️ Sửa</button>`}
         </div>
       </div>`;
     })}</div>
