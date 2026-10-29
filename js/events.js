@@ -77,7 +77,7 @@ function readEventInfo(sheets, fileName) {
       const cells = (r || []).map((c) => (c == null ? '' : String(c).trim())).filter(Boolean);
       if (!cells.length) continue;
       const k = fold(cells[0]);
-      if (!info.name && /checklist/.test(k) && cells.length === 1) info.name = cells[0].replace(/\s*[-–]\s*checklist.*$/i, '').replace(/^checklist[^-–]*[-–]\s*/i, '').trim();
+      if (!info.name && /checklist/.test(k) && cells.length === 1 && cells[0].length <= 120 && !/[.:]$/.test(cells[0]) && !/^(cot|ghi chu|luu y|sheet|huong dan)\b|\bsheet\b/.test(k)) info.name = cells[0].replace(/\s*[-–]\s*checklist.*$/i, '').replace(/^checklist[^-–]*[-–]\s*/i, '').trim();
       if (cells.length < 2) {
         if (!info.event_date && /ngay d|ngay to chuc/.test(k)) info.event_date = date(cells[0]);
         continue;
@@ -199,6 +199,35 @@ function ImportChecklist({ ctx, ev, onClose, onDone }) {
   </${Modal}>`;
 }
 
+// Sửa tên, khách hàng, ngày, địa điểm của giải. Đổi ngày thì dời hạn các việc chưa xong theo ngày mới.
+function EditEvent({ ctx, ev, onClose }) {
+  const [f, setF] = useState({ name: ev.name || '', client_name: ev.client_name || '', event_date: ev.event_date || '', venue: ev.venue || '' });
+  const set = (k) => (e) => { const v = e.target.value; setF((x) => ({ ...x, [k]: v })); };
+  const movable = ctx.state.ev_tasks.filter((t) => t.event_id === ev.id && t.status !== 'done' && t.offset_days != null);
+  const dateChanged = f.event_date && f.event_date !== ev.event_date;
+  const [shift, setShift] = useState(true);
+  function save(e) {
+    e.preventDefault();
+    if (!f.name.trim()) return;
+    actions.saveEvent(ev.id, { name: f.name.trim(), client_name: f.client_name.trim() || null, event_date: f.event_date || null, venue: f.venue.trim() || null });
+    if (dateChanged && shift) for (const t of movable) actions.updateEvTask(t.id, { due_date: U.addDays(t.offset_days, f.event_date) });
+    ctx.notify(dateChanged && shift && movable.length ? `Đã lưu, dời hạn ${movable.length} việc theo ngày mới` : 'Đã lưu');
+    onClose();
+  }
+  return html`<${Modal} title="Sửa thông tin giải" onClose=${onClose}>
+    <form class="form" onSubmit=${save}>
+      <label>Tên giải *<input value=${f.name} onInput=${set('name')} /></label>
+      <label>Khách hàng<input value=${f.client_name} onInput=${set('client_name')} /></label>
+      <div class="grid2">
+        <label>Ngày diễn ra (ngày D)<input type="date" value=${f.event_date} onInput=${set('event_date')} /></label>
+        <label>Địa điểm<input value=${f.venue} onInput=${set('venue')} /></label>
+      </div>
+      ${dateChanged && movable.length > 0 && html`<label class="row"><input type="checkbox" checked=${shift} onChange=${(e) => setShift(e.target.checked)} /> Dời hạn ${movable.length} việc chưa xong theo ngày mới</label>`}
+      <div class="row end"><button type="button" class="btn" onClick=${onClose}>Huỷ</button><button class="btn primary">Lưu</button></div>
+    </form>
+  <//>`;
+}
+
 function EventDetail({ ctx, ev, onBack }) {
   const { state, me } = ctx;
   const isAdmin = me.role === 'admin';
@@ -206,6 +235,7 @@ function EventDetail({ ctx, ev, onBack }) {
   const [adding, setAdding] = useState(null);
   const [importing, setImporting] = useState(false);
   const [assignCat, setAssignCat] = useState(null);
+  const [editing, setEditing] = useState(false);
   const today = U.todayStr();
   const all = state.ev_tasks.filter((t) => t.event_id === ev.id).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
   const list = all.filter((t) =>
@@ -222,9 +252,11 @@ function EventDetail({ ctx, ev, onBack }) {
       </div>
       <div class="row">
         ${isAdmin && html`<select value=${ev.status} onChange=${(e) => actions.saveEvent(ev.id, { status: e.target.value })}>${Object.entries(EV_STATUS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>`}
+        ${isAdmin && html`<button class="btn" onClick=${() => setEditing(true)}>✏️ Sửa thông tin giải</button>`}
         ${isAdmin && html`<button class="btn" onClick=${() => setImporting(true)}>⬆ Nhập checklist từ file</button>`}
       </div>
     </div>
+    ${editing && html`<${EditEvent} ctx=${ctx} ev=${ev} onClose=${() => setEditing(false)} />`}
     <div class="stats">
       <div class="stat"><b>${s.pct}%</b><span>Hoàn thành (${s.done}/${s.total})</span></div>
       <div class=${'stat ' + (s.overdue ? 'bad' : '')}><b>${s.overdue}</b><span>Việc quá hạn</span></div>
