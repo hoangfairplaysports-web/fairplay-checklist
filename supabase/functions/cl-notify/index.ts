@@ -1,6 +1,7 @@
 // Bộ nhắc việc — cron gọi mỗi 5 phút (header x-cron-secret = CRON_SECRET).
 // Người dùng đã đăng nhập gọi với { action: 'test' } để nhận 1 thông báo thử.
 import { admin, addDays, caller, cors, dowOf, fmtTime, json, Member, notifyMember, once, toMin, vnNow } from '../_shared/common.ts';
+import { teamReportText } from '../_shared/team-report.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
@@ -15,6 +16,8 @@ Deno.serve(async (req) => {
     return json(r);
   }
   if (!CRON_SECRET || req.headers.get('x-cron-secret') !== CRON_SECRET) return json({ error: 'Forbidden' }, 403);
+  // Xem trước báo cáo đội nhóm (không gửi)
+  if (body.action === 'team_preview') return json({ text: await teamReportText() });
 
   const sent: string[] = [];
   try {
@@ -107,6 +110,11 @@ async function runReminders(sent: string[]) {
         const pending = (reps ?? []).filter((r) => r.status === 'submitted').length;
         const text = [missing.length ? `Chưa nộp báo cáo: ${missing.map((m) => m.full_name).join(', ')}` : 'Đã nộp đủ báo cáo ✅', pending ? `${pending} báo cáo đang chờ duyệt.` : ''].filter(Boolean).join('\n');
         for (const a of admins) await send(`sum1730:${a.id}:${today}`, a, '📨 Báo cáo cuối ngày', text, 'sum1730');
+      }
+      // 6b) 18:30 — AI Quản lý Đội nhóm: chuyên cần, báo cáo, KPI, việc quá hạn (T2–T6)
+      if (inWindow('18:30', '19:30') && admins.length) {
+        const text = await teamReportText().catch((e) => `Không tạo được báo cáo đội nhóm: ${e}`);
+        for (const a of admins) await send(`team1830:${a.id}:${today}`, a, '👥 Quản lý Đội nhóm', text, 'team1830');
       }
     }
   }
