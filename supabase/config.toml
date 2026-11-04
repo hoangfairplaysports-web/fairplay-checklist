@@ -13,3 +13,5 @@ verify_jwt = false
 verify_jwt = false
 [functions.cl-ideas]
 verify_jwt = false
+[functions.cl-ceo-report]
+verify_jwt = false
