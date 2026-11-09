@@ -331,12 +331,12 @@ function EventDetail({ ctx, ev, onBack }) {
       return html`<section class="section" key=${ph}>
         <div class="section-head"><h2>▶ ${label.toUpperCase()} <span class="count">${n.filter((t) => t.status === 'done').length}/${n.length}</span></h2>
           ${isAdmin && html`<button class="btn sm" onClick=${() => setAdding({ phase: ph })}>+ Thêm việc</button>`}</div>
-        ${!rows.length ? html`<div class="tempty">Không có việc.</div>` : html`<div class="ledger evledger">
-          <div class="lg-head"><span>Hạn</span><span>Việc</span><span>Trạng thái</span><span>Ghi chú</span><span></span></div>
+        ${!rows.length ? html`<div class="tempty">Không có việc.</div>` : html`<div class="ledger evledger has-inote">
+          <div class="lg-head"><span>Hạn</span><span>Việc</span><span>Trạng thái</span><span>Ghi chú (như file khách)</span><span>🔒 Giao việc / lưu ý nội bộ</span><span></span></div>
           ${cats.map((c) => html`
             <div class="lg-div row between"><span>${c}</span>
               ${isAdmin && html`<button class="link small" onClick=${() => setAssignCat({ phase: ph, category: c, stage: stage === '*' ? undefined : stage || null })}>Giao cả nhóm</button>`}</div>
-            ${rows.filter((t) => (t.category || 'Khác') === c).map((t) => html`<${EvRow} key=${t.id} t=${t} ctx=${ctx} staff=${staff} showStage=${stage === '*' && stages.length > 0} />`)}`)}
+            ${rows.filter((t) => (t.category || 'Khác') === c).map((t) => html`<${EvRow} key=${t.id} t=${t} ctx=${ctx} staff=${staff} showStage=${stage === '*' && stages.length > 0} inoteCol />`)}`)}
         </div>`}
       </section>`;
     })}`}
@@ -346,7 +346,7 @@ function EventDetail({ ctx, ev, onBack }) {
   </div>`;
 }
 
-export function EvRow({ t, ctx, staff, showEvent, showStage }) {
+export function EvRow({ t, ctx, staff, showEvent, showStage, inoteCol }) {
   const { me, state } = ctx;
   const isAdmin = me.role === 'admin';
   const ids = picIdsOf(t);
@@ -355,7 +355,9 @@ export function EvRow({ t, ctx, staff, showEvent, showStage }) {
   const today = U.todayStr();
   const [note, setNote] = useState(t.note || '');
   const [edit, setEdit] = useState(false);
+  const [inote, setInote] = useState(t.internal_note || '');
   useEffect(() => setNote(t.note || ''), [t.note]);
+  useEffect(() => setInote(t.internal_note || ''), [t.internal_note]);
   const late = t.status !== 'done' && t.due_date && t.due_date < today;
   const pic = ids.length ? ids.map((id) => state.people.find((p) => p.id === id)?.full_name || '?').join(', ') : t.pic_name;
   const ev = showEvent && state.events.find((e) => e.id === t.event_id);
@@ -384,19 +386,25 @@ export function EvRow({ t, ctx, staff, showEvent, showStage }) {
       ${canEdit
         ? html`<${GrowNote} value=${note} onInput=${setNote} onSave=${() => note !== (t.note || '') && actions.updateEvTask(t.id, { note })} />`
         : html`<div class=${'note-ro' + (note ? '' : ' empty-ro')}>${note || '—'}</div>`}
+      ${!inoteCol && inote && html`<div class="inote-ro">🔒 ${inote}</div>`}
     </div>
+    ${inoteCol && html`<div class="c-inote">
+      ${isAdmin
+        ? html`<${GrowNote} value=${inote} onInput=${setInote} placeholder="Giao cho ai, chú trọng gì, cần lưu ý gì…" cls="inote" onSave=${() => inote !== (t.internal_note || '') && actions.updateEvTask(t.id, { internal_note: inote })} />`
+        : html`<div class=${'inote-ro' + (inote ? '' : ' empty-ro')}>${inote || '—'}</div>`}
+    </div>`}
     <button type="button" class="c-more" disabled=${!isAdmin} onClick=${() => setEdit(true)} title="Sửa việc">⋯</button>
     ${edit && html`<${EvTaskForm} ctx=${ctx} task=${t} staff=${staff || state.people} onClose=${() => setEdit(false)} />`}
   </div>`;
 }
 
 // Ô ghi chú tự giãn theo nội dung: luôn thấy hết chữ. Enter = lưu, Shift+Enter = xuống dòng.
-function GrowNote({ value, onInput, onSave }) {
+function GrowNote({ value, onInput, onSave, placeholder = 'Ghi chú / kết quả…', cls = '' }) {
   const ref = useRef(null);
   const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
   useEffect(fit, [value]);
   useEffect(() => { addEventListener('resize', fit); return () => removeEventListener('resize', fit); }, []);
-  return html`<textarea ref=${ref} rows="1" class="in-note grow" value=${value} placeholder="Ghi chú / kết quả…"
+  return html`<textarea ref=${ref} rows="1" class=${'in-note grow ' + cls} value=${value} placeholder=${placeholder}
     onInput=${(e) => { onInput(e.target.value); fit(); }} onBlur=${onSave}
     onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.blur(); } }}></textarea>`;
 }

@@ -503,3 +503,14 @@ table.sheet tr.sh-sec td { background: #eef6ff; font-weight: 700; color: #1e3a5f
 @container (max-width: 1100px) { .evledger .lg-head, .evledger .crow { --stw: 250px; } .evledger .sb em { display: none; } .evledger .sb.on em { display: inline; } }
 .seg-col { display: grid; gap: 6px; }
 @container (max-width: 680px) { .evledger .c-status { grid-template-columns: repeat(5, 1fr); } .evledger .sb em { display: inline; } }
+
+/* Ghi chú nội bộ (giao việc, lưu ý) - chỉ Fairplay thấy, không có trong file gửi khách */
+.evledger.has-inote .lg-head, .evledger.has-inote .crow { grid-template-columns: 52px minmax(0, 1fr) var(--stw, 392px) minmax(0, 0.9fr) minmax(0, 0.9fr) 30px; }
+.c-inote { min-width: 0; }
+.c-note textarea.grow.inote, .c-inote textarea.grow { width: 100%; padding: 6px 9px; font: inherit; font-size: 13px; line-height: 1.45; border-radius: 8px; resize: none; overflow: hidden; min-height: 32px; white-space: pre-wrap; overflow-wrap: anywhere; background: #fffaf0; border: 1px dashed #f0c46c; }
+.inote-ro { font-size: 13px; white-space: pre-wrap; color: #92400e; background: #fffaf0; border-radius: 8px; padding: 4px 8px; margin-top: 4px; }
+.inote-ro.empty-ro { background: none; color: var(--muted); padding: 0; }
+@container (max-width: 680px) {
+  .evledger.has-inote .crow { grid-template-columns: 42px minmax(0, 1fr) 28px; grid-template-areas: "time title more" "status status status" "note note note" "inote inote inote"; }
+  .c-inote { grid-area: inote; }
+}

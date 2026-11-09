@@ -75,7 +75,7 @@ export function DayView({ ctx, person, date = U.todayStr(), readOnly = false, pr
 
     ${isMe && isToday && privacy !== 'private' && myEventTasks(state, person.id).length > 0 && html`<section class="section">
       <div class="section-head"><h2>🏆 Việc giải đấu của tôi (3 ngày tới & quá hạn)</h2></div>
-      <div class=${'ledger' + (locked ? ' dim' : '')}>${myEventTasks(state, person.id).map((t) => html`<${EvRow} key=${t.id} t=${t} ctx=${ctx} showEvent />`)}</div>
+      <div class=${'ledger evledger' + (locked ? ' dim' : '')}>${myEventTasks(state, person.id).map((t) => html`<${EvRow} key=${t.id} t=${t} ctx=${ctx} showEvent />`)}</div>
     </section>`}
     <${Ledger} ctx=${ctx} tasks=${tasks} backlog=${backlog} date=${date} locked=${locked} editable=${canAct && !locked} viewOnly=${readOnly || !isMe} onMore=${setOpen} privacy=${privacy} />
 

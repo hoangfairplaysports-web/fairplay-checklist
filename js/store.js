@@ -112,7 +112,7 @@ const pick = (o, keys) => Object.fromEntries(keys.filter((k) => k in o).map((k) 
 const TASK_COLS = ['id', 'owner_id', 'title', 'date', 'time', 'end_time', 'due_date', 'source', 'routine_id', 'scope', 'group', 'priority', 'status',
   'progress', 'output', 'qty', 'note', 'block_reason', 'need_help', 'kpi_id', 'assigned_by'];
 const ROUTINE_COLS = ['id', 'title', 'owner_id', 'dept', 'repeat', 'days', 'month_day', 'time', 'end_time', 'kind', 'priority', 'scope', 'group', 'kpi_key', 'active'];
-const EV_TASK_COLS = ['id', 'event_id', 'phase', 'category', 'title', 'detail', 'pic_id', 'pic_ids', 'pic_name', 'sup_client', 'sup_fp', 'offset_days', 'due_date', 'status', 'note', 'item_id', 'sort', 'stage', 'qty', 'due_time', 'src_key'];
+const EV_TASK_COLS = ['id', 'event_id', 'phase', 'category', 'title', 'detail', 'pic_id', 'pic_ids', 'pic_name', 'sup_client', 'sup_fp', 'offset_days', 'due_date', 'status', 'note', 'item_id', 'sort', 'stage', 'qty', 'due_time', 'src_key', 'internal_note'];
 const EV_SHEET_COLS = ['id', 'event_id', 'name', 'title', 'note', 'header', 'rows', 'check_cols', 'sort'];
 const KPI_COLS = ['id', 'key', 'title', 'owner_id', 'type', 'target', 'period', 'unit', 'manual', 'active', 'crm_metric'];
 
